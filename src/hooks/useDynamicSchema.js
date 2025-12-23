@@ -233,6 +233,7 @@ const useDynamicSchema = (initialCsv = []) => {
   const [firestoreData, setFirestoreData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [localData, setLocalData] = useState([]);
 
   // Firestore real-time subscription to 'emigrants'
   useEffect(() => {
@@ -256,9 +257,10 @@ const useDynamicSchema = (initialCsv = []) => {
 
   // mergedData: CSV (if present) takes precedence, otherwise Firestore
   const mergedData = useMemo(() => {
-    const base = (csvData && csvData.length > 0) ? csvData : firestoreData;
+    const base = (csvData && csvData.length > 0) ? csvData : 
+                 (firestoreData.length > 0 ? firestoreData : localData);
     return normalizeData(base);
-  }, [csvData, firestoreData]);
+  }, [csvData, firestoreData, localData]);
 
   // generate schema & types from merged
   const { columns, types } = useMemo(() => generateSchema(mergedData), [mergedData]);
@@ -338,6 +340,7 @@ const useDynamicSchema = (initialCsv = []) => {
     types,
     loading,
     error,
+    setData: setLocalData, //added
     setCsvData,
     getColumnType,
     getCategoricalValues,

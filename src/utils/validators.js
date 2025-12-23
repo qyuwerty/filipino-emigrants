@@ -7,6 +7,8 @@ export const validateCsvData = (data) => {
   const errors = [];
   const warnings = [];
 
+  
+
   // Check if data exists
   if (!data || data.length === 0) {
     errors.push("CSV file is empty");

@@ -24,6 +24,7 @@
  * @component
  */
 import React, { useMemo } from "react";
+import { getYearColumnData } from "../utils/yearUtils";
 import {
   LineChart, Line,
   BarChart, Bar,
@@ -68,12 +69,12 @@ const DynamicChart = ({ data, variable, types }) => {
    * Finds the year column (case-insensitive)
    * Year column is used for time-series charts
    */
-  const yearColumn = useMemo(() => {
-    const yearCol = Object.keys(data[0] || {}).find(
-      key => key.toLowerCase() === 'year'
-    );
-    return yearCol;
-  }, [data]);
+  const yearData = useMemo(() => {
+  return getYearColumnData(data);
+}, [data]);
+
+const yearColumn = yearData?.yearColumn;
+const hasYearData = yearData?.hasYearData || false;
 
   /**
    * ========== TIME SERIES DATA PREPARATION ==========
@@ -167,34 +168,7 @@ const DynamicChart = ({ data, variable, types }) => {
    */
   const renderChart = () => {
     switch (colType) {
-      case "year":
         // Year columns → Bar chart showing year distribution
-        return (
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={categoricalData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis 
-                dataKey="name" 
-                label={{ value: 'Year', position: 'insideBottom', offset: -10, style: { fontSize: '14px', fontWeight: '600' } }} 
-                tick={{ fontSize: 14 }}
-              />
-              <YAxis 
-                label={{ value: 'Number of Records', angle: -90, position: 'insideLeft', style: { fontSize: '14px', fontWeight: '600' } }} 
-                tick={{ fontSize: 14 }}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  fontSize: '14px', 
-                  padding: '12px',
-                  borderRadius: '8px',
-                  border: '1px solid #e5e7eb'
-                }} 
-              />
-              <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '14px' }} />
-              <Bar dataKey="value" fill="#8884d8" name="Records" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        );
 
       case "number":
         // Numeric columns → Bar chart showing trends over time (if year exists)

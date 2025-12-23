@@ -1,15 +1,158 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { addRecord, updateRecord, deleteRecord } from "../services/firestoreService";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { addRecord, updateRecord, deleteRecord, clearCollection } from "../services/firestoreService";
+import { getColumnsWithYearFirst, getYearColumnData } from "../utils/yearUtils";
+import { AlertCircle, CheckCircle2, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 
-// ✅ FIX: format object fields safely so UI doesn't crash
+// TableInput Component - Fixed cursor issues
+const TableInput = ({ 
+  type = "text", 
+  value = "", 
+  onChange, 
+  hasError = false, 
+  isYear = false, 
+  isNewRow = false, 
+  placeholder = "", 
+  disabled = false,
+  readOnly = false,
+  onClick, 
+  onBlur,
+  autoFocus = false 
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const [internalValue, setInternalValue] = useState(value);
+  const inputRef = useRef(null);
+  
+  useEffect(() => {
+    setInternalValue(value);
+  }, [value]);
+
+  
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus();
+      const cursorPosition = inputRef.current.selectionStart;
+      
+      if (String(value) !== String(internalValue)) {
+        const length = inputRef.current.value.length;
+        inputRef.current.setSelectionRange(length, length);
+      } else {
+        inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+      }
+    }
+  }, [autoFocus, value, internalValue]);
+
+  const stringValue = internalValue !== null && internalValue !== undefined ? String(internalValue) : "";
+  
+  const inputStyle = {
+    caretColor: readOnly ? 'transparent' : '#3b82f6',
+    cursor: readOnly ? 'not-allowed' : 'text',
+    pointerEvents: readOnly ? 'none' : 'auto',
+    userSelect: readOnly ? 'none' : 'text',
+    backgroundColor: readOnly ? '#f3f4f6' : (isFocused ? 'white' : (isNewRow ? '#fefce8' : 'white')),
+    borderRadius: '6px',
+    padding: '10px 12px',
+    fontSize: '14px',
+    width: '100%',
+    outline: 'none',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    WebkitTapHighlightColor: 'transparent',
+    minHeight: '42px',
+    boxSizing: 'border-box',
+    borderTop: hasError ? '2px solid #ef4444' : isFocused ? `2px solid ${isNewRow ? '#10b981' : '#3b82f6'}` : '2px solid #d1d5db',
+    borderRight: hasError ? '2px solid #ef4444' : isFocused ? `2px solid ${isNewRow ? '#10b981' : '#3b82f6'}` : '2px solid #d1d5db',
+    borderBottom: hasError ? '2px solid #ef4444' : isFocused ? `2px solid ${isNewRow ? '#10b981' : '#3b82f6'}` : '2px solid #d1d5db',
+    borderLeft: isYear ? '4px solid #60a5fa' : (hasError ? '2px solid #ef4444' : isFocused ? `2px solid ${isNewRow ? '#10b981' : '#3b82f6'}` : '2px solid #d1d5db')
+  };
+  
+  if (isYear) {
+    inputStyle.paddingLeft = '16px';
+  }
+  
+  const handleInputChange = (e) => {
+    if (readOnly) return;
+    
+    const inputValue = e.target.value;
+    const cursorPosition = e.target.selectionStart;
+    
+    setInternalValue(inputValue);
+    
+    if (isYear) {
+      if (inputValue === '' || /^\d{0,4}$/.test(inputValue)) {
+        onChange(e);
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+          }
+        }, 0);
+      }
+      return;
+    }
+    
+    if (type === 'number') {
+      if (inputValue === '' || /^-?\d*\.?\d*$/.test(inputValue)) {
+        onChange(e);
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+          }
+        }, 0);
+      }
+      return;
+    }
+    
+    onChange(e);
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+      }
+    }, 0);
+  };
+  
+  const handleBlur = (e) => {
+    setIsFocused(false);
+    if (onBlur) onBlur(e);
+  };
+  
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={stringValue}
+      onChange={handleInputChange}
+      onClick={(e) => {
+        if (readOnly) return;
+        e.stopPropagation();
+        if (onClick) onClick(e);
+      }}
+      onBlur={handleBlur}
+      style={inputStyle}
+      placeholder={placeholder}
+      disabled={disabled}
+      readOnly={readOnly}
+      onFocus={() => !readOnly && setIsFocused(true)}
+      autoComplete="off"
+      autoFocus={autoFocus}
+      inputMode={type === 'number' || isYear ? 'numeric' : 'text'}
+      className={readOnly ? "cursor-not-allowed" : "cursor-text select-all"}
+    />
+  );
+};
+
+
+// Utility Functions
 const formatCell = (value) => {
   if (value === null || value === undefined) return "";
-  if (typeof value === "object") return JSON.stringify(value); 
+  if (typeof value === "object") {
+    if (value.value !== undefined) return String(value.value);
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      const firstValue = Object.values(value)[0];
+      return String(firstValue || "");
+    }
+    return JSON.stringify(value);
+  }
   return String(value);
 };
 
-// Validate Year as 4-digit number (1900-2100)
 const validateYear = (value) => {
   if (!value || value === "") return { valid: false, message: "Year is required" };
   const yearStr = String(value).trim();
@@ -23,63 +166,128 @@ const validateYear = (value) => {
   return { valid: true, value: yearNum };
 };
 
-// Validate numeric field
 const validateNumber = (value, fieldName) => {
   if (value === "" || value === null || value === undefined) {
-    return { valid: true, value: 0 }; // Allow empty, default to 0
+    return { valid: true, value: 0 };
   }
-  const numValue = Number(value);
+  
+  let numValue;
+  if (typeof value === 'object' && value !== null) {
+    if (value.value !== undefined) {
+      numValue = Number(value.value);
+    } else {
+      return { valid: false, message: `${fieldName} has invalid format` };
+    }
+  } else {
+    numValue = Number(value);
+  }
+  
   if (isNaN(numValue)) {
     return { valid: false, message: `${fieldName} must be a number` };
-  }
-  if (numValue < 0) {
-    return { valid: false, message: `${fieldName} cannot be negative` };
   }
   return { valid: true, value: numValue };
 };
 
-// Get field type based on column name
 const getFieldType = (columnName) => {
   const colLower = columnName.toLowerCase();
   if (colLower === "year") return "year";
-  const numericFields = ["single", "married", "widower", "widowed", "separated", "divorced", "notreported", "not-reported", "live_in", "live-in", "quantity"];
+  
+  const numericFields = ["single", "married", "widower", "widowed", "separated", "divorced", "live_in", "live-in"];
+  
+  if (colLower.includes("not reported") || colLower.includes("no response")) {
+    return "number";
+  }
+  
   if (numericFields.some(field => colLower.includes(field))) return "number";
   return "text";
 };
 
-const DataTable = ({ data = [], setData = () => {}, schema = [], types = {} }) => {
-  const columns = data.length ? Object.keys(data[0]).filter(col => col !== "id") : [];
-  const blankRow = useMemo(
-    () => Object.fromEntries(columns.map((col) => [col, ""])),
-    [columns]
-  );
+const getYearColor = (year) => {
+  const colors = [
+    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+    '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+    '#06B6D4', '#D946EF', '#F43F5E', '#22C55E', '#A855F7'
+  ];
+  if (!year) return '#9CA3AF';
+  const hash = String(year).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return colors[hash % colors.length];
+};
 
-  const [editRowIndex, setEditRowIndex] = useState(null);
-  const [newRow, setNewRow] = useState(blankRow);
-  const [errors, setErrors] = useState({});
-  const [saveStatus, setSaveStatus] = useState({ type: null, message: "" });
+// Main DataTable Component
+const DataTable = ({ data = [], setData = () => {}, userRole = 'user' }) => {
+  // Safety check for userRole
+  const safeUserRole = userRole || 'user';
+  
+  //Memoized columns with Year first
+  const { allColumns, yearColumn } = useMemo(() => {
+    return getColumnsWithYearFirst(data);
+  }, [data]);
+  
+ //Memoized function to create a blank row so it doesn't recreate on every render
+  const createBlankRow = useCallback(() => {
+  const blankRow = {};
+  allColumns.forEach((col) => {
+    //const fieldType = getFieldType(col);
+    blankRow[col] = ""; 
+  });  
+  return blankRow;
+}, [allColumns, yearColumn]);
+  
+  const [newRow, setNewRow] = useState(() => createBlankRow());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage] = useState(8);
+  const [editRowIndex, setEditRowIndex] = useState(null); //
+  const [editingField, setEditingField] = useState(null);
+  const [errors, setErrors] = useState({});const [operationMessage, setOperationMessage] = useState(""); // For success/error messages only
+const [deletingRowId, setDeletingRowId] = useState(null); // Track which row is being deleted
+  const [isResetting, setIsResetting] = useState(false);
+  const [currentPageYearColors, setCurrentPageYearColors] = useState({});
+  const [editingRowId, setEditingRowId] = useState(null); // Track which row is being edited
+const [savingRowId, setSavingRowId] = useState(null); // Track which row is being saved
+const [isAddingNew, setIsAddingNew] = useState(false); // Track if adding new record
 
+  const totalPages = Math.ceil(data.length / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedData = useMemo(() => data.slice(startIndex, endIndex), [data, startIndex, endIndex]);
+  
+  const currentPageYearData = useMemo(() => {
+    return getYearColumnData(paginatedData);
+  }, [paginatedData]);
+  
   useEffect(() => {
-    setNewRow(blankRow);
+    setNewRow(createBlankRow());
     setErrors({});
-  }, [blankRow]);
-
-  const handleEdit = (index) => {
-    setEditRowIndex(index);
-    setErrors({});
-    setSaveStatus({ type: null, message: "" });
-  };
-
-  // Validate and prepare data for Firestore
+  }, [createBlankRow]);
+  
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [data.length, totalPages, currentPage]);
+  
+  useEffect(() => {
+    const pageYears = {};
+    if (currentPageYearData?.yearColumn) {
+      paginatedData.forEach(row => {
+        const yearValue = row[currentPageYearData.yearColumn];
+        if (yearValue) {
+          pageYears[yearValue] = getYearColor(yearValue);
+        }
+      });
+    }
+    setCurrentPageYearColors(pageYears);
+  }, [paginatedData, currentPageYearData]);
+  
   const validateAndPrepareData = (rowData, isNew = false) => {
     const errors = {};
     const preparedData = {};
-
-    columns.forEach((col) => {
+    
+    allColumns.forEach((col) => {
       const value = rowData[col];
       const fieldType = getFieldType(col);
-
-      if (col.toLowerCase() === "year") {
+      
+      if (col === yearColumn) {
         const validation = validateYear(value);
         if (!validation.valid) {
           errors[col] = validation.message;
@@ -94,190 +302,526 @@ const DataTable = ({ data = [], setData = () => {}, schema = [], types = {} }) =
         }
         preparedData[col] = validation.value;
       } else {
-        // For other fields, keep as string or convert appropriately
         preparedData[col] = value !== null && value !== undefined ? String(value).trim() : "";
       }
     });
-
+    
     return { errors, preparedData };
   };
+  
+const handleFieldClick = (rowIndex, field) => {
+  setEditingField({ rowIndex, field });
+};
 
-  const handleSaveEdit = async (index) => {
-    const row = data[index];
-    const { errors: validationErrors, preparedData } = validateAndPrepareData(row, false);
+const handleReset = async () => {
+  if (isResetting) return;
 
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      setSaveStatus({ type: "error", message: "Please fix validation errors before saving" });
+  const confirmed = window.confirm("This will delete all records from the database. Continue?");
+  if (!confirmed) return;
+
+  try {
+    setIsResetting(true);
+    setOperationMessage("");
+
+    await clearCollection();
+    setData([]);
+    setNewRow(createBlankRow());
+    setCurrentPage(1);
+    setEditRowIndex(null);
+    setErrors({});
+
+    setOperationMessage("✅ All records have been cleared");
+  } catch (error) {
+    console.error("Error resetting data:", error);
+    setOperationMessage(`❌ Failed to reset data: ${error.message}`);
+  } finally {
+    setIsResetting(false);
+    setTimeout(() => setOperationMessage(""), 3000);
+  }
+};
+
+const handleEdit = (index) => {
+  // Don't allow editing multiple rows at once
+  if (editRowIndex !== null) {
+    setOperationMessage("⚠️ Please save or cancel the current edit first");
+    setTimeout(() => setOperationMessage(""), 2000);
+    return;
+  }
+  
+  const globalIndex = startIndex + index;
+  setEditRowIndex(globalIndex);
+  setEditingField(null);
+  setErrors({});
+  setOperationMessage(""); // Clear messages
+};
+  
+const handleSaveEdit = async (index) => {
+  const globalIndex = startIndex + index;
+  const row = data[globalIndex]; // This gets the CURRENT edited data from state
+  
+  // Validate the CURRENT row data (which includes user edits)
+  const { errors: validationErrors, preparedData } = validateAndPrepareData(row, false);
+  
+  if (Object.keys(validationErrors).length > 0) {
+    setErrors(validationErrors);
+    setOperationMessage("⚠️ Please fix validation errors");
+    setTimeout(() => setOperationMessage(""), 3000);
+    return;
+  }
+  
+  try {
+    setSavingRowId(row.id);
+    
+    // Send the preparedData to Firestore (without the id field)
+    const { id, ...dataToSave } = preparedData;
+    
+    console.log("Saving to Firestore:", dataToSave); // Debug log
+    
+    await updateRecord(row.id, dataToSave);
+    
+    // Update local state with the prepared data
+    const updatedDataArray = [...data];
+    updatedDataArray[globalIndex] = {
+      id: row.id, // Keep the id
+      ...preparedData // Use preparedData which has properly formatted values
+    };
+    
+    setData(updatedDataArray);
+    setEditRowIndex(null);
+    setEditingField(null);
+    setErrors({});
+    setOperationMessage("✅ Record updated successfully!");
+    
+    setTimeout(() => setOperationMessage(""), 2000);
+    
+  } catch (error) {
+    console.error("Error updating record:", error);
+    setOperationMessage(`❌ Failed to update: ${error.message}`);
+    setTimeout(() => setOperationMessage(""), 3000);
+  } finally {
+    setSavingRowId(null);
+  }
+};
+  
+const handleDelete = async (index) => {
+  const globalIndex = startIndex + index;
+  const row = data[globalIndex];
+  
+  if (!window.confirm("Are you sure you want to delete this record?")) {
+    return;
+  }
+  
+  try {
+    setDeletingRowId(row.id); // Lock only THIS row's delete button
+    
+    await deleteRecord(row.id);
+    
+    const updated = [...data];
+    updated.splice(globalIndex, 1);
+    setData(updated);
+    
+    setOperationMessage("✅ Record deleted successfully!");
+    setTimeout(() => setOperationMessage(""), 2000);
+    
+  } catch (error) {
+    console.error("Error deleting record:", error);
+    setOperationMessage(`❌ Failed to delete: ${error.message}`);
+    setTimeout(() => setOperationMessage(""), 3000);
+  } finally {
+    setDeletingRowId(null); // Always unlock
+  }
+};
+  
+const handleAdd = async () => {
+  console.log("=== ADD BUTTON CLICKED ===");
+  setErrors({});
+  setOperationMessage(""); // Clear previous messages
+  
+  try {
+    // Validate year column
+    if (yearColumn) {
+      const yearValue = newRow[yearColumn];
+      console.log("Year validation - yearValue:", yearValue);
+      
+      if (!yearValue && yearValue !== 0) {
+        console.log("Year validation FAILED: Year is required");
+        setErrors({ [yearColumn]: "Year is required" });
+        setOperationMessage("⚠️ Year is required");
+        setTimeout(() => setOperationMessage(""), 3000);
+        return;
+      }
+      
+      const yearNum = Number(yearValue);
+      if (isNaN(yearNum) || yearNum < 1900 || yearNum > 2100) {
+        console.log("Year validation FAILED: Invalid year range");
+        setErrors({ [yearColumn]: "Year must be between 1900-2100" });
+        setOperationMessage("⚠️ Invalid year");
+        setTimeout(() => setOperationMessage(""), 3000);
+        return;
+      }
+    }
+    
+    // Validate numeric fields
+    const fieldErrors = {};
+    allColumns.forEach((col) => {
+      const fieldType = getFieldType(col);
+      const value = newRow[col];
+      
+      if (fieldType === "number" && value !== "" && value !== null) {
+        const numValue = Number(value);
+        if (isNaN(numValue) || numValue < 0) {
+          fieldErrors[col] = "Must be a non-negative number";
+        }
+      }
+    });
+    
+    if (Object.keys(fieldErrors).length > 0) {
+      console.log("Field validation FAILED:", fieldErrors);
+      setErrors(fieldErrors);
+      setOperationMessage("⚠️ Please fix validation errors");
+      setTimeout(() => setOperationMessage(""), 3000);
       return;
     }
-
-    try {
-      setSaveStatus({ type: "loading", message: "Saving..." });
-      // Remove id from data before sending to Firestore (id is document ID, not a field)
-      const { id, ...dataToSave } = preparedData;
-      await updateRecord(row.id, dataToSave);
-      setSaveStatus({ type: "success", message: "Record updated successfully!" });
-      setEditRowIndex(null);
-      setErrors({});
-      setTimeout(() => setSaveStatus({ type: null, message: "" }), 2000);
-    } catch (error) {
-      console.error("Error updating record:", error);
-      setSaveStatus({ type: "error", message: `Failed to update: ${error.message}` });
+    
+    console.log("✅ All validations passed");
+    
+    // Start adding
+    setIsAddingNew(true);
+    console.log("🔄 isAddingNew set to TRUE");
+    
+    // Prepare data
+    const dataToSave = { ...newRow };
+    
+    allColumns.forEach((col) => {
+      const fieldType = getFieldType(col);
+      const value = dataToSave[col];
+      
+      if ((fieldType === "number" || col === yearColumn) && value !== "") {
+        const numValue = Number(value);
+        if (!isNaN(numValue)) {
+          dataToSave[col] = numValue;
+        }
+      }
+    });
+    
+    // Remove empty fields
+    Object.keys(dataToSave).forEach((key) => {
+      if (dataToSave[key] === "") delete dataToSave[key];
+    });
+    
+    console.log("📦 Data prepared for Firestore:", dataToSave);
+    
+    // Add to Firestore
+    console.log("🔥 Calling addRecord...");
+    const addedRecord = await addRecord(dataToSave);
+    console.log("✅ addRecord returned:", addedRecord);
+    
+    if (!addedRecord?.id) {
+      throw new Error("Failed to get record ID from Firestore");
     }
-  };
-
-  const handleDelete = async (index) => {
-    if (!window.confirm("Are you sure you want to delete this record?")) {
-      return;
+    
+    console.log("📝 Record ID received:", addedRecord.id);
+    
+    // Update local state
+    console.log("🔄 Updating local state...");
+    setData((prev) => {
+      const updated = [...prev, { ...dataToSave, id: addedRecord.id }];
+      console.log("✅ Local state updated, new length:", updated.length);
+      return updated;
+    });
+    
+    console.log("🧹 Resetting newRow...");
+    setNewRow(createBlankRow());
+    
+    console.log("🧹 Clearing errors...");
+    setErrors({});
+    
+    console.log("✅ Setting success message...");
+    setOperationMessage("✅ Record added successfully!");
+    
+    // Update pagination
+    const totalRecords = data.length + 1;
+    if (totalRecords > currentPage * rowsPerPage) {
+      const newPage = Math.ceil(totalRecords / rowsPerPage);
+      console.log("📄 Moving to page:", newPage);
+      setCurrentPage(newPage);
     }
-
-    try {
-      const row = data[index];
-      await deleteRecord(row.id);
-      const updated = [...data];
-      updated.splice(index, 1);
-      setData(updated);
-      setSaveStatus({ type: "success", message: "Record deleted successfully!" });
-      setTimeout(() => setSaveStatus({ type: null, message: "" }), 2000);
-    } catch (error) {
-      console.error("Error deleting record:", error);
-      setSaveStatus({ type: "error", message: `Failed to delete: ${error.message}` });
+    
+    setTimeout(() => setOperationMessage(""), 2000);
+    console.log("🎉 ADD OPERATION COMPLETED SUCCESSFULLY");
+    
+  } catch (error) {
+    console.error("❌ ERROR in handleAdd:", error);
+    console.error("Error stack:", error.stack);
+    setOperationMessage(`❌ ${error?.message || "Failed to add record"}`);
+    setTimeout(() => setOperationMessage(""), 3000);
+  } finally {
+    console.log("🔓 Setting isAddingNew to FALSE");
+    setIsAddingNew(false); // Always unlock the button
+  }
+};
+  
+const handleCellChange = (rowIndex, field, value, isNewRow = false) => {
+  console.log("Cell change:", { rowIndex, field, value, isNewRow });
+  
+  if (isNewRow) {
+    setNewRow(prev => {
+      const updated = { ...prev, [field]: value };
+      console.log("New row updated:", updated);
+      return updated;
+    });
+    
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
     }
-  };
-
-  const handleAdd = async () => {
-    const { errors: validationErrors, preparedData } = validateAndPrepareData(newRow, true);
-
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      setSaveStatus({ type: "error", message: "Please fix validation errors before adding" });
-      return;
-    }
-
-    try {
-      setSaveStatus({ type: "loading", message: "Adding record..." });
-      await addRecord(preparedData);
-      setData([...data, { ...preparedData, id: `temp-${Date.now()}` }]); // Temporary ID until Firestore syncs
-      setNewRow(blankRow);
-      setErrors({});
-      setSaveStatus({ type: "success", message: "Record added successfully!" });
-      setTimeout(() => setSaveStatus({ type: null, message: "" }), 2000);
-    } catch (error) {
-      console.error("Error adding record:", error);
-      setSaveStatus({ type: "error", message: `Failed to add: ${error.message}` });
-    }
-  };
-
-  const handleCellChange = (rowIndex, column, value, isNewRow = false) => {
-    if (isNewRow) {
-      setNewRow({ ...newRow, [column]: value });
-      // Clear error for this field when user starts typing
-      if (errors[column]) {
-        setErrors({ ...errors, [column]: undefined });
+  } else {
+    const globalIndex = startIndex + rowIndex;
+    const updatedData = [...data];
+    updatedData[globalIndex] = {
+      ...updatedData[globalIndex],
+      [field]: value
+    };
+    setData(updatedData);
+  }
+  
+  setEditingField({ rowIndex, field });
+};
+  
+  const generatePageNumbers = () => {
+    const pages = [];
+    
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
       }
     } else {
-      const updated = [...data];
-      updated[rowIndex][column] = value;
-      setData(updated);
-      if (errors[column]) {
-        setErrors({ ...errors, [column]: undefined });
+      pages.push(1);
+      
+      if (currentPage > 3) {
+        pages.push('...');
       }
+      
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+      
+      pages.push(totalPages);
     }
+    
+    return pages;
   };
-
-  if (!columns.length) {
+  
+  const PaginationControls = () => (
+    <div className="mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="text-sm bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-2 rounded-lg border border-blue-100 data-table__summary data-table__summary--records">
+          <span className="data-table__summary-heading">Showing records</span>
+          <span className="data-table__summary-value">{startIndex + 1} - {Math.min(endIndex, data.length)}</span>
+          <span className="data-table__summary-label">of</span>
+          <span className="data-table__summary-value">{data.length}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="flex items-center gap-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-indigo-600 transition-all shadow-md hover:shadow-lg active:scale-95"
+          >
+            <ChevronLeft size={18} />
+            <span>Previous</span>
+          </button>
+          
+          <div className="flex items-center gap-1 pagination">
+            {generatePageNumbers().map((pageNum, idx) => (
+              pageNum === '...' ? (
+                <span key={`ellipsis-${idx}`} className="pagination-ellipsis">...</span>
+              ) : (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`pagination-btn ${currentPage === pageNum ? 'pagination-active' : 'pagination-inactive'}`}
+                  aria-current={currentPage === pageNum ? "page" : undefined}
+                >
+                  {pageNum}
+                </button>
+              )
+            ))}
+          </div>
+          
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="flex items-center gap-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-indigo-600 transition-all shadow-md hover:shadow-lg active:scale-95"
+          >
+            <span>Next</span>
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        
+        <div className="text-sm bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-2 rounded-lg border border-emerald-100 data-table__summary data-table__summary--page">
+          <span className="data-table__summary-heading">Page</span>
+          <span className="data-table__summary-value">{currentPage}</span>
+          <span className="data-table__summary-label">of</span>
+          <span className="data-table__summary-value">{totalPages}</span>
+        </div>
+      </div>
+      
+      <div className="mt-3 flex justify-center">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="data-table__meta-label">Go to page:</span>
+          <select 
+            value={currentPage}
+            onChange={(e) => setCurrentPage(Number(e.target.value))}
+            className="px-3 py-1 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm data-table__select"
+          >
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <option key={page} value={page}>{page}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+  
+  if (!allColumns.length) {
     return (
-      <div className="card data-table animate-fade-in">
-        <div className="card-body empty-state">
-          <div className="empty-state-icon">📄</div>
-          <h3>Upload data to get started</h3>
-          <p>Your CSV records will appear here for easy editing.</p>
+      <div className="data-table animate-fade-in">
+        <div className="data-table__body">
+          <div className="empty-state">
+            <div className="empty-state__icon">📄</div>
+            <h3 className="empty-state__title">Upload data to get started</h3>
+            <p className="empty-state__subtitle">Your CSV records will appear here for easy editing.</p>
+          </div>
         </div>
       </div>
     );
   }
-
+  
   return (
-    <div className="card data-table animate-fade-in">
-      <div className="card-header data-table__header">
-        <div>
-          <p className="data-table__eyebrow">Realtime dataset</p>
-          <h2>CSV Data Table</h2>
-          <p className="data-table__subtitle">
-            Review, edit, and add records synced with Firebase. Friendly controls help keep your data tidy.
-          </p>
-        </div>
+    <div className="data-table animate-fade-in">
+      <div className="data-table__header">
+        <div className="data-table__header-content">
+          <div className="data-table__stat">
+            <div className="stat-card-compact">
+              <div className="stat-value">{data.length}</div>
+              <div className="stat-label">TOTAL RECORDS</div>
+            </div>
 
-        <div className="data-table__stat">
-          <span className="stat-label">Total records</span>
-          <span className="stat-value">{data.length}</span>
+            {yearColumn && (
+              <div className="ml-4 px-3 py-1 bg-blue-50 rounded-lg border border-blue-100">
+                <span className="text-sm text-blue-700 font-medium">Year Column:</span>
+                <span className="ml-1 text-sm font-bold text-blue-800">{yearColumn}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="data-table__actions">
+            {data.length > 0 && safeUserRole === 'admin' && (
+              <button
+                onClick={handleReset}
+                disabled={isResetting}
+                className="btn-reset"
+                title="Delete all records from the database"
+              >
+                <RotateCcw size={18} className={isResetting ? "animate-spin" : ""} />
+                <span>{isResetting ? "Resetting..." : "Reset All Data"}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="card-body data-table__body">
-        {/* Status Messages */}
-        {saveStatus.type && (
-          <div className={`alert ${saveStatus.type === "error" ? "alert-error" : saveStatus.type === "success" ? "alert-success" : "alert-info"} mb-4`}>
-            {saveStatus.type === "error" && <AlertCircle size={18} />}
-            {saveStatus.type === "success" && <CheckCircle2 size={18} />}
-            <span>{saveStatus.message}</span>
+      <div className="data-table__body">
+        {operationMessage && (
+          <div
+            className={`alert mb-4 ${
+              operationMessage.includes('✅')
+                ? 'alert-success'
+                : operationMessage.includes('❌')
+                ? 'alert-error'
+                : 'alert-info'
+            }`}
+          >
+            {operationMessage.includes('❌') && <AlertCircle size={18} />}
+            {operationMessage.includes('✅') && <CheckCircle2 size={18} />}
+            <span>{operationMessage}</span>
           </div>
         )}
 
-        {/* ========== VALIDATION TIP ========== */}
-        {/* Helpful guidance for students */}
-        <div className="data-table__tip mb-6">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">💡</span>
-            <div>
-              <strong className="text-base block mb-2">Data Entry Rules:</strong>
-              <ul className="text-sm space-y-1 text-gray-700">
-                <li>• <strong>Year:</strong> Must be exactly 4 digits (e.g., 2000, 2022)</li>
-                <li>• <strong>Year Range:</strong> Between 1900 and 2100</li>
-                <li>• <strong>Status Fields:</strong> Must be numbers (0 or positive) - no decimals</li>
-                <li>• <strong>Empty Fields:</strong> Will default to 0 for numeric fields</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        {data.length > rowsPerPage && <PaginationControls />}
 
-        {/* ========== DATA TABLE ========== */}
         <div className="data-table__scroll">
           <table>
             <thead>
               <tr>
-                {columns.map((col) => (
+                {allColumns.map((col) => (
                   <th key={col} className="text-base font-bold">
                     {col}
+                    {col === yearColumn && (
+                      <span className="ml-2 text-xs font-normal text-blue-400">(Year Column - Read Only)</span>
+                    )}
                   </th>
                 ))}
                 <th className="text-base font-bold">Actions</th>
               </tr>
             </thead>
-
             <tbody>
-              {data.map((row, rowIndex) => (
-                <tr key={row.id || rowIndex} className={editRowIndex === rowIndex ? "data-table__row--editing" : ""}>
-                  {columns.map((col) => {
+              {paginatedData.map((row, rowIndex) => (
+                <tr key={row.id || startIndex + rowIndex} className={editRowIndex === startIndex + rowIndex ? "data-table__row--editing" : ""}>
+                  {allColumns.map((col) => {
                     const fieldType = getFieldType(col);
-                    const isYear = col.toLowerCase() === "year";
+                    const isYear = col === yearColumn;
                     const isNumeric = fieldType === "number";
-                    const hasError = errors[col] && editRowIndex === rowIndex;
+                    const hasError = errors[col] && editRowIndex === startIndex + rowIndex;
+                    const cellValue = row[col];
                     
                     return (
-                      <td key={col}>
-                        {editRowIndex === rowIndex ? (
+                      <td key={col} className={`${isYear ? 'year-column' : ''} relative group`}>
+                        {isYear && cellValue && (
+                          <>
+                            <div 
+                              className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b"
+                              style={{ 
+                                background: `linear-gradient(to bottom, ${getYearColor(cellValue)}80, ${getYearColor(cellValue)})`,
+                                borderTopRightRadius: '4px',
+                                borderBottomRightRadius: '4px'
+                              }}
+                              title={`Year ${cellValue}`}
+                            />
+                            <div 
+                              className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{ backgroundColor: getYearColor(cellValue) }}
+                              title={`Color code for Year ${cellValue}`}
+                            />
+                          </>
+                        )}
+                        
+                        {editRowIndex === startIndex + rowIndex ? (
                           <div>
-                            <input
+                            <TableInput
                               type={isYear || isNumeric ? "number" : "text"}
-                              value={row[col] || ""}
+                              value={cellValue || ""}
                               onChange={(e) => handleCellChange(rowIndex, col, e.target.value, false)}
-                              className={hasError ? "border-red-500" : ""}
-                              placeholder={isYear ? "e.g., 2000" : isNumeric ? "0" : ""}
-                              min={isYear ? 1900 : isNumeric ? 0 : undefined}
-                              max={isYear ? 2100 : undefined}
-                              step={isNumeric ? 1 : undefined}
+                              onClick={() => handleFieldClick(rowIndex, col)}
+                              hasError={hasError}
+                              isYear={isYear}
+                              isNewRow={false}
+                              readOnly={isYear}
+                              placeholder={isYear ? "Year (read-only)" : isNumeric ? "0" : ""}
+                              disabled={savingRowId === row.id}
+                              autoFocus={editingField?.rowIndex === rowIndex && editingField?.field === col}
                             />
                             {hasError && (
                               <div className="data-table__validation-error mt-2">
@@ -287,90 +831,125 @@ const DataTable = ({ data = [], setData = () => {}, schema = [], types = {} }) =
                             )}
                           </div>
                         ) : (
-                          formatCell(row[col])
+                          <div className="flex items-center gap-2">
+                            <span className={`data-table__value${isYear ? ' data-table__value--year' : ''}`}>
+                              {formatCell(cellValue)}
+                            </span>
+                            {isYear && cellValue && (
+                              <div 
+                                className="w-5 h-5 rounded-full border-2 border-white shadow-md flex items-center justify-center"
+                                style={{ backgroundColor: getYearColor(cellValue) }}
+                                title={`Year ${cellValue} color`}
+                              />
+                            )}
+                          </div>
                         )}
                       </td>
                     );
                   })}
-
-                  <td>
-                    <div className="table-actions">
-                      {editRowIndex === rowIndex ? (
-                        <button 
-                          className="btn btn-success" 
-                          onClick={() => handleSaveEdit(rowIndex)}
-                          disabled={saveStatus.type === "loading"}
-                        >
-                          {saveStatus.type === "loading" ? "Saving..." : "💾 Save"}
-                        </button>
-                      ) : (
-                        <button 
-                          className="btn btn-primary" 
-                          onClick={() => handleEdit(rowIndex)}
-                        >
-                          ✏️ Edit
-                        </button>
-                      )}
-
-                      <button 
-                        className="btn btn-danger" 
-                        onClick={() => handleDelete(rowIndex)}
-                        disabled={saveStatus.type === "loading"}
-                      >
-                        🗑️ Delete
-                      </button>
-                    </div>
-                  </td>
+                  
+          <td>
+            <div className="table-actions">
+              {editRowIndex === startIndex + rowIndex ? (
+                <button 
+                  className="btn btn-success" 
+                  onClick={() => handleSaveEdit(rowIndex)}
+                  disabled={savingRowId === row.id}
+                >
+                  {savingRowId === row.id ? "Saving..." : "💾 Save"}
+                </button>
+              ) : (
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => handleEdit(rowIndex)}
+                  disabled={editRowIndex !== null} // Only disable if another row is editing
+                >
+                  ✏️ Edit
+                </button>
+              )}
+                    <button 
+                      className="btn btn-danger" 
+                      onClick={() => handleDelete(rowIndex)}
+                      disabled={deletingRowId === row.id || editRowIndex === startIndex + rowIndex}
+                    >
+                      {deletingRowId === row.id ? "Deleting..." : "🗑️ Delete"}
+                    </button>
+                  </div>
+                </td>
                 </tr>
               ))}
-
-              <tr className="data-table__new-row">
-                {columns.map((col) => {
-                  const fieldType = getFieldType(col);
-                  const isYear = col.toLowerCase() === "year";
-                  const isNumeric = fieldType === "number";
-                  const hasError = errors[col];
-                  
-                  return (
-                    <td key={col}>
-                      <div>
-                        <input
-                          type={isYear || isNumeric ? "number" : "text"}
-                          value={newRow[col] || ""}
-                          onChange={(e) => handleCellChange(null, col, e.target.value, true)}
-                          className={hasError ? "border-red-500" : ""}
-                          placeholder={
-                            isYear ? "Year (e.g., 2000)" : 
-                            isNumeric ? `${col} (number)` : 
-                            `Enter ${col}`
-                          }
-                          min={isYear ? 1900 : isNumeric ? 0 : undefined}
-                          max={isYear ? 2100 : undefined}
-                          step={isNumeric ? 1 : undefined}
-                        />
-                        {hasError && (
-                          <div className="data-table__validation-error mt-2">
-                            <AlertCircle size={14} />
-                            <span className="font-medium">{errors[col]}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-                <td>
-                  <button 
-                    className="btn btn-success w-full btn-large" 
-                    onClick={handleAdd}
-                    disabled={saveStatus.type === "loading"}
-                  >
-                    {saveStatus.type === "loading" ? "⏳ Adding..." : "➕ Add New Record"}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
+              
+              {/* Add New Row */}
+{safeUserRole === 'admin' && (
+  <tr className="data-table__new-row">
+    {allColumns.map((col) => {
+      const fieldType = getFieldType(col);
+      const isYear = col === yearColumn;
+      const isNumeric = fieldType === "number";
+      const hasError = errors[col];
+      
+      return (
+        <td key={col} className={isYear ? 'year-column' : ''}>
+          <div>
+            <TableInput
+              type={isYear || isNumeric ? "number" : "text"}
+              value={newRow[col] || ""}
+              onChange={(e) => handleCellChange(null, col, e.target.value, true)}
+              onClick={() => handleFieldClick(-1, col)}
+              hasError={hasError}
+              isYear={isYear}
+              isNewRow={true}
+              placeholder={
+                isYear ? "📅 Year (e.g., 2000)" : 
+                isNumeric ? `${col} (number)` : 
+                `Enter ${col}`
+              }
+              disabled={isAddingNew}
+              autoFocus={editingField?.rowIndex === -1 && editingField?.field === col}
+            />
+            {hasError && (
+              <div className="data-table__validation-error mt-2">
+                <AlertCircle size={14} />
+                <span className="font-medium">{errors[col]}</span>
+              </div>
+            )}
+          </div>
+        </td>
+      );
+    })}
+    
+    {/* Add button with debugging */}
+    <td>
+      <button 
+        className="btn btn-success w-full btn-large" 
+        onClick={(e) => {
+          console.log("=== BUTTON CLICKED ===");
+          console.log("Event:", e);
+          console.log("isAddingNew:", isAddingNew);
+          console.log("safeUserRole:", safeUserRole);
+          handleAdd();
+        }}
+        disabled={isAddingNew}
+        style={{
+          cursor: isAddingNew ? 'not-allowed' : 'pointer',
+          pointerEvents: 'auto',
+          zIndex: 10,
+          position: 'relative'
+        }}
+      >
+        {isAddingNew ? "⏳ Adding..." : "➕ Add New Record"}
+      </button>
+      
+      
+    </td>
+  </tr>
+)}
+              
+            </tbody>  
           </table>
         </div>
+        
+        {data.length > rowsPerPage && <PaginationControls />}
       </div>
     </div>
   );
