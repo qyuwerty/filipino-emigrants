@@ -37,7 +37,7 @@ const CsvUploader = ({ onCsvData, onClearData, userRole, isAuthenticated }) => {
 
   // ========== SIMPLIFIED: All authenticated users can upload ==========
   const canUpload = isAuthenticated;
-  
+
   /**
    * ========== CLEAR FILE HANDLER ==========
    * Resets all state and clears data from Firestore
@@ -76,7 +76,7 @@ const CsvUploader = ({ onCsvData, onClearData, userRole, isAuthenticated }) => {
       setError("❌ Please login to replace files");
       return;
     }
-    
+
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
@@ -128,16 +128,7 @@ const CsvUploader = ({ onCsvData, onClearData, userRole, isAuthenticated }) => {
           return;
         }
 
-        const csvData = results.data.filter(row => {
-          return Object.values(row).some(val => val !== null && val !== undefined && val !== "");
-        });
-
-        if (csvData.length === 0) {
-          setError("CSV file is empty or contains no valid data");
-          setIsUploading(false);
-          e.target.value = null;
-          return;
-        }
+        const csvData = results.data;
 
         // Process CSV data
         const invalidRows = [];

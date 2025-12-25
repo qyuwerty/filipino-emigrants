@@ -34,6 +34,16 @@ const hasPermission = (role, permission) => {
   return PERMISSIONS[role?.toUpperCase()]?.includes(permission) || false;
 };
 
+const getCollectionNameFromCsv = (rows = [], fallback = "emigrants") => {
+  if (!Array.isArray(rows) || rows.length === 0) return fallback;
+  const firstRow = rows[0];
+  const columns = Object.keys(firstRow || {});
+  if (!columns || columns.length === 0) return fallback;
+  const firstColumnName = columns[0];
+  if (!firstColumnName) return fallback;
+  return firstColumnName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "").trim() || fallback;
+};
+
 const App = () => {
   // ========== AUTHENTICATION STATE ==========
   const [authLoading, setAuthLoading] = useState(false);
@@ -50,7 +60,8 @@ const App = () => {
   const fileInputRef = useRef(null);
   
   // ========== DATA HOOK ==========
-  const { data, schema, types, loading, error, setData } = useDynamicSchema(csvData);
+  const collectionName = useMemo(() => getCollectionNameFromCsv(csvData), [csvData]);
+  const { data, schema, types, loading, error, setData, datasetName } = useDynamicSchema(csvData, collectionName);
   
   // ========== USER STATE ==========
   const [isAuthenticated, setIsAuthenticated] = useState(false);

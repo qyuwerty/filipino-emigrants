@@ -1,5 +1,5 @@
 // src/hooks/useDynamicSchema.js
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -126,6 +126,30 @@ const normalizeData = (rows) => {
   return groupStatusFields(normalized);
 };
 
+const sortRowsByYear = (rows = []) => {
+  if (!Array.isArray(rows)) return [];
+
+  return [...rows].sort((a, b) => {
+    const aYear = Number(a?.year ?? Number.NEGATIVE_INFINITY);
+    const bYear = Number(b?.year ?? Number.NEGATIVE_INFINITY);
+    if (Number.isNaN(aYear) && Number.isNaN(bYear)) return 0;
+    if (Number.isNaN(aYear)) return 1;
+    if (Number.isNaN(bYear)) return -1;
+    return aYear - bYear;
+  });
+};
+
+/**
+ * Helper to determine which dataset should power the UI.
+ * Exported for testing.
+ */
+export const selectBaseData = (csvData = [], localData = [], firestoreData = []) => {
+  if (Array.isArray(csvData) && csvData.length > 0) return csvData;
+  if (Array.isArray(localData) && localData.length > 0) return localData;
+  if (Array.isArray(firestoreData) && firestoreData.length > 0) return firestoreData;
+  return [];
+};
+
 /**
  * Column type detection
  */
@@ -228,7 +252,7 @@ const generateSchema = (data) => {
  *  - setCsvData: function to push CSV rows from CsvUploader
  *  - loading, error
  */
-const useDynamicSchema = (initialCsv = []) => {
+const useDynamicSchema = (initialCsv = [], datasetName = "emigrants") => {
   const [csvData, setCsvData] = useState(initialCsv || []);
   const [firestoreData, setFirestoreData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -238,11 +262,13 @@ const useDynamicSchema = (initialCsv = []) => {
   // Firestore real-time subscription to 'emigrants'
   useEffect(() => {
     setLoading(true);
+    const collectionRef = collection(db, datasetName || "emigrants");
     const unsub = onSnapshot(
-      collection(db, "emigrants"),
+      collectionRef,
       (snapshot) => {
         const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setFirestoreData(docs);
+        setFirestoreData(sortRowsByYear(docs));
+        setLocalData([]);
         setLoading(false);
       },
       (err) => {
@@ -253,13 +279,13 @@ const useDynamicSchema = (initialCsv = []) => {
     );
 
     return () => unsub();
-  }, []);
+  }, [datasetName]);
 
   // mergedData: CSV (if present) takes precedence, otherwise Firestore
   const mergedData = useMemo(() => {
-    const base = (csvData && csvData.length > 0) ? csvData : 
-                 (firestoreData.length > 0 ? firestoreData : localData);
-    return normalizeData(base);
+    const base = selectBaseData(csvData, localData, firestoreData);
+    const normalized = normalizeData(base);
+    return sortRowsByYear(normalized);
   }, [csvData, firestoreData, localData]);
 
   // generate schema & types from merged
@@ -334,19 +360,24 @@ const useDynamicSchema = (initialCsv = []) => {
     })).sort((a, b) => a.year - b.year);
   };
 
+  const setDataSorted = useCallback((rows = []) => {
+    setLocalData(sortRowsByYear(rows));
+  }, []);
+
   return {
     data: mergedData,
     schema: columns,
     types,
     loading,
     error,
-    setData: setLocalData, //added
+    setData: setDataSorted, //added
     setCsvData,
     getColumnType,
     getCategoricalValues,
     getNumericRange,
     suggestChartType,
     getYearAggregatedData,
+    datasetName,
   };
 };
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { addRecord, updateRecord, deleteRecord, clearCollection } from "../services/firestoreService";
 import { getColumnsWithYearFirst, getYearColumnData } from "../utils/yearUtils";
-import { AlertCircle, CheckCircle2, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertCircle, CheckCircle2, RotateCcw, ChevronLeft, ChevronRight, Pencil, Trash2, X } from "lucide-react";
 
 // TableInput Component - Fixed cursor issues
 const TableInput = ({ 
