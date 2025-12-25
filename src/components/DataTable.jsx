@@ -214,7 +214,7 @@ const getYearColor = (year) => {
 };
 
 // Main DataTable Component
-const DataTable = ({ data = [], setData = () => {}, userRole = 'user' }) => {
+const DataTable = ({ data = [], setData = () => {}, userRole = 'user', datasetName = "emigrants" }) => {
   // Safety check for userRole
   const safeUserRole = userRole || 'user';
   
@@ -236,15 +236,19 @@ const DataTable = ({ data = [], setData = () => {}, userRole = 'user' }) => {
   const [newRow, setNewRow] = useState(() => createBlankRow());
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage] = useState(8);
-  const [editRowIndex, setEditRowIndex] = useState(null); //
-  const [editingField, setEditingField] = useState(null);
-  const [errors, setErrors] = useState({});const [operationMessage, setOperationMessage] = useState(""); // For success/error messages only
-const [deletingRowId, setDeletingRowId] = useState(null); // Track which row is being deleted
+  const [errors, setErrors] = useState({});
+  const [operationMessage, setOperationMessage] = useState("");
   const [isResetting, setIsResetting] = useState(false);
   const [currentPageYearColors, setCurrentPageYearColors] = useState({});
-  const [editingRowId, setEditingRowId] = useState(null); // Track which row is being edited
-const [savingRowId, setSavingRowId] = useState(null); // Track which row is being saved
-const [isAddingNew, setIsAddingNew] = useState(false); // Track if adding new record
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [savingRowId, setSavingRowId] = useState(null);
+  const [editRowIndex, setEditRowIndex] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+  const [editModal, setEditModal] = useState({ open: false, globalIndex: null, rowId: null });
+  const [editForm, setEditForm] = useState({});
+  const [editErrors, setEditErrors] = useState({});
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingRowId, setDeletingRowId] = useState(null);
 
   const totalPages = Math.ceil(data.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
