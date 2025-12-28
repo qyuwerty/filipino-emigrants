@@ -1,236 +1,122 @@
-// src/utils/dataPreparation.js
-import * as tf from '@tensorflow/tfjs';
+/**
+ * Data Preparation Utilities for LSTM/MLP Time Series Forecasting
+ */
 
 /**
- * Min-Max Scaler for normalizing data
+ * Clean and validate data, converting to numerical format
+ * Missing values are converted to zero
  */
-class MinMaxScaler {
-  constructor() {
-    this.min = null;
-    this.max = null;
-  }
-
-  fit(data) {
-    this.min = Math.min(...data);
-    this.max = Math.max(...data);
-  }
-
-  transform(data) {
-    if (this.min === null || this.max === null) {
-      throw new Error('Scaler not fitted. Call fit() first.');
-    }
-    
-    const range = this.max - this.min;
-    if (range === 0) return data.map(() => 0);
-    
-    return data.map(value => (value - this.min) / range);
-  }
-
-  fitTransform(data) {
-    this.fit(data);
-    return this.transform(data);
-  }
-
-  inverse(normalizedValue) {
-    if (this.min === null || this.max === null) {
-      throw new Error('Scaler not fitted. Call fit() first.');
-    }
-    
-    const range = this.max - this.min;
-    return normalizedValue * range + this.min;
-  }
+export function cleanData(data) {
+  return data.map(row => ({
+    year: parseInt(row.year) || 0,
+    population: parseFloat(row.population) || 0,
+    emigrants: parseFloat(row.emigrants) || 0
+  }));
 }
 
 /**
- * Create sequences for time series prediction
- * @param {Array} data - Time series data
- * @param {number} lookback - Number of time steps to look back
- * @returns {Object} - { X, Y } sequences
+ * Sort data chronologically by year
  */
-function createSequences(data, lookback) {
-  const X = [];
-  const Y = [];
-
-  for (let i = lookback; i < data.length; i++) {
-    X.push(data.slice(i - lookback, i));
-    Y.push(data[i]);
-  }
-
-  return { X, Y };
+export function sortData(data) {
+  return [...data].sort((a, b) => a.year - b.year);
 }
 
 /**
- * Prepare time series data for ML training
- * @param {Array} rawData - Array of emigrant records with year and value columns
- * @param {number} lookback - Number of past years to consider
- * @param {string} targetColumn - Column to predict (default: total emigrants)
- * @returns {Object} - Prepared tensors and metadata
+ * Min-Max Normalization: scales values to [0, 1] range
+ * normalized = (value - min) / (max - min)
  */
-export function prepareTimeSeriesData(rawData, lookback, targetColumn = null) {
-  if (!rawData || rawData.length === 0) {
-    throw new Error('No data provided for time series preparation');
-  }
+export function normalizeData(data, features = ['population', 'emigrants']) {
+  const mins = {};
+  const maxs = {};
 
-  // Find year column (case insensitive)
-  const yearColumn = Object.keys(rawData[0]).find(
-    key => key.toLowerCase() === 'year'
-  );
-
-  if (!yearColumn) {
-    throw new Error('No "year" column found in data');
-  }
-
-  // Sort data by year
-  const sortedData = [...rawData].sort((a, b) => a[yearColumn] - b[yearColumn]);
-
-  // Determine target column
-  let valueColumn = targetColumn;
-  if (!valueColumn) {
-    // If not specified, try to find a numeric column (excluding year)
-    const numericColumns = Object.keys(sortedData[0]).filter(key => {
-      const val = sortedData[0][key];
-      return key !== yearColumn && 
-             key !== 'id' && 
-             !isNaN(val) && 
-             typeof val === 'number';
-    });
-
-    if (numericColumns.length === 0) {
-      throw new Error('No numeric columns found for prediction');
-    }
-
-    valueColumn = numericColumns[0];
-  }
-
-  console.log(`Preparing time series for column: ${valueColumn}`);
-
-  // Extract values and years
-  const values = sortedData.map(row => row[valueColumn]);
-  const years = sortedData.map(row => row[yearColumn]);
-
-  if (values.some(v => v === null || v === undefined || isNaN(v))) {
-    throw new Error(`Column "${valueColumn}" contains invalid values`);
-  }
+  // Calculate min and max for each feature
+  features.forEach(feature => {
+    const values = data.map(row => row[feature]);
+    mins[feature] = Math.min(...values);
+    maxs[feature] = Math.max(...values);
+  });
 
   // Normalize data
-  const scaler = new MinMaxScaler();
-  const normalizedValues = scaler.fitTransform(values);
+  const normalized = data.map(row => {
+    const normalizedRow = { ...row };
+    features.forEach(feature => {
+      const range = maxs[feature] - mins[feature];
+      normalizedRow[feature] = range === 0 ? 0 : (row[feature] - mins[feature]) / range;
+    });
+    return normalizedRow;
+  });
 
-  // Create sequences
-  const { X, Y } = createSequences(normalizedValues, lookback);
+  return { normalized, mins, maxs };
+}
 
-  if (X.length === 0) {
-    throw new Error(`Not enough data for lookback=${lookback}. Need at least ${lookback + 1} records.`);
+/**
+ * Denormalize values back to original scale
+ * denormalized = normalized * (max - min) + min
+ */
+export function denormalize(normalizedValue, min, max) {
+  return normalizedValue * (max - min) + min;
+}
+
+/**
+ * Create sequences using sliding window approach
+ * @param {Array} data - Normalized data
+ * @param {number} lookback - Window size (default: 3)
+ * @param {Array} features - Features to use as input ['population', 'emigrants']
+ * @param {string} target - Target feature to predict ('emigrants')
+ * @returns {Object} - { X: input sequences, y: target values }
+ */
+export function createSequences(data, lookback = 3, features = ['population', 'emigrants'], target = 'emigrants') {
+  const X = [];
+  const y = [];
+
+  for (let i = lookback; i < data.length; i++) {
+    // Get lookback window of features
+    const sequence = [];
+    for (let j = i - lookback; j < i; j++) {
+      const featureValues = features.map(f => data[j][f]);
+      sequence.push(featureValues);
+    }
+    X.push(sequence);
+
+    // Target is the next value of the target feature
+    y.push(data[i][target]);
   }
 
-  // Split into train/test (80/20)
-  const trainSize = Math.floor(X.length * 0.8);
-  
-  const trainX = X.slice(0, trainSize);
-  const trainY = Y.slice(0, trainSize);
-  const testX = X.slice(trainSize);
-  const testY = Y.slice(trainSize);
+  return { X, y };
+}
 
-  // Convert to TensorFlow tensors
-  const trainXTensor = tf.tensor3d(
-    trainX.map(seq => seq.map(val => [val])),
-    [trainX.length, lookback, 1]
-  );
-  
-  const trainYTensor = tf.tensor2d(
-    trainY.map(val => [val]),
-    [trainY.length, 1]
-  );
-  
-  const testXTensor = tf.tensor3d(
-    testX.map(seq => seq.map(val => [val])),
-    [testX.length, lookback, 1]
-  );
-  
-  const testYTensor = tf.tensor2d(
-    testY.map(val => [val]),
-    [testY.length, 1]
-  );
+/**
+ * Calculate performance metrics
+ */
+export function calculateMetrics(actual, predicted) {
+  const n = actual.length;
 
-  console.log('Data preparation complete:', {
-    totalSamples: X.length,
-    trainSamples: trainX.length,
-    testSamples: testX.length,
-    lookback: lookback,
-    targetColumn: valueColumn
-  });
+  // Mean Absolute Error (MAE)
+  const mae = actual.reduce((sum, val, i) => sum + Math.abs(val - predicted[i]), 0) / n;
+
+  // Root Mean Squared Error (RMSE)
+  const mse = actual.reduce((sum, val, i) => sum + Math.pow(val - predicted[i], 2), 0) / n;
+  const rmse = Math.sqrt(mse);
+
+  // Mean Absolute Percentage Error (MAPE)
+  const mape = actual.reduce((sum, val, i) => {
+    return sum + (val !== 0 ? Math.abs((val - predicted[i]) / val) : 0);
+  }, 0) / n * 100;
+
+  // R-squared (R²)
+  const mean = actual.reduce((sum, val) => sum + val, 0) / n;
+  const ssRes = actual.reduce((sum, val, i) => sum + Math.pow(val - predicted[i], 2), 0);
+  const ssTot = actual.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0);
+  const r2 = 1 - (ssRes / ssTot);
+
+  // Accuracy (100 - MAPE)
+  const accuracy = 100 - mape;
 
   return {
-    trainX: trainXTensor,
-    trainY: trainYTensor,
-    testX: testXTensor,
-    testY: testYTensor,
-    scaler: scaler,
-    years: years.slice(lookback), // Years corresponding to predictions
-    originalValues: values,
-    targetColumn: valueColumn
+    mae: mae.toFixed(2),
+    rmse: rmse.toFixed(2),
+    mape: mape.toFixed(2),
+    r2: r2.toFixed(4),
+    accuracy: accuracy.toFixed(2)
   };
 }
-
-/**
- * Aggregate emigrant data by year (sum all numeric columns)
- * @param {Array} rawData - Raw emigrant records
- * @returns {Array} - Aggregated data by year
- */
-export function aggregateByYear(rawData) {
-  if (!rawData || rawData.length === 0) return [];
-
-  const yearColumn = Object.keys(rawData[0]).find(
-    key => key.toLowerCase() === 'year'
-  );
-
-  if (!yearColumn) {
-    throw new Error('No "year" column found in data');
-  }
-
-  // Group by year
-  const yearGroups = {};
-  
-  rawData.forEach(row => {
-    const year = row[yearColumn];
-    if (!yearGroups[year]) {
-      yearGroups[year] = { [yearColumn]: year };
-    }
-
-    // Sum all numeric columns
-    Object.keys(row).forEach(key => {
-      if (key !== yearColumn && key !== 'id' && !isNaN(row[key])) {
-        yearGroups[year][key] = (yearGroups[year][key] || 0) + Number(row[key]);
-      }
-    });
-  });
-
-  return Object.values(yearGroups).sort((a, b) => a[yearColumn] - b[yearColumn]);
-}
-
-/**
- * Calculate total emigrants per year (sum of all status columns)
- * @param {Array} rawData - Raw emigrant records
- * @returns {Array} - Data with total column
- */
-export function calculateTotals(rawData) {
-  const yearColumn = Object.keys(rawData[0] || {}).find(
-    key => key.toLowerCase() === 'year'
-  );
-
-  return rawData.map(row => {
-    let total = 0;
-    Object.keys(row).forEach(key => {
-      if (key !== yearColumn && key !== 'id' && !isNaN(row[key])) {
-        total += Number(row[key]);
-      }
-    });
-    
-    return {
-      ...row,
-      total: total
-    };
-  });
-}
-
-export { MinMaxScaler };

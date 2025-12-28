@@ -57,6 +57,7 @@ const App = () => {
   const [minYear, setMinYear] = useState(null);
   const [maxYear, setMaxYear] = useState(null);
   const [showExportPanel, setShowExportPanel] = useState(false);
+  const [forecasts, setForecasts] = useState(null);
   const fileInputRef = useRef(null);
   
   // ========== DATA HOOK ==========
@@ -773,11 +774,22 @@ const App = () => {
       </div>
 
       {isForecastOpen && (
-        <ForecastPanel
-          data={filteredData}
-          isOpen={isForecastOpen}
-          onClose={() => setIsForecastOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4">
+              <button
+                onClick={() => setIsForecastOpen(false)}
+                className="float-right text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+              <ForecastPanel
+                data={filteredData}
+                onForecastUpdate={setForecasts}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {showExportPanel && (

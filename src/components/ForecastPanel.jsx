@@ -1,383 +1,363 @@
-// src/components/ForecastPanel.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Brain, Play } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { trainMLPModel } from '../models/mlpModels';
-import { prepareTimeSeriesData } from '../utils/dataPreparation';
+import { useState } from 'react';
+import { cleanData, sortData, normalizeData, denormalize, createSequences, calculateMetrics } from '../utils/dataPreparation';
+import { buildLSTMModel, trainLSTMModel, predictLSTM, saveLSTMModel, loadLSTMModel, deleteLSTMModel, downloadLSTMModel } from '../models/lstmModel';
+import { buildMLPModel, trainMLPModel, predictMLP, saveMLPModel, loadMLPModel, deleteMLPModel, downloadMLPModel } from '../models/mlpModel';
 import './ForecastPanel.css';
 
-const ForecastPanel = ({ data, isOpen, onClose }) => {
+export default function ForecastPanel({ data, onForecastUpdate }) {
+  const [modelType, setModelType] = useState('LSTM');
   const [isTraining, setIsTraining] = useState(false);
-  const [trainingProgress, setTrainingProgress] = useState(0);
-  
-  const [mlpConfig, setMlpConfig] = useState({
-    lookback: 12,
-    hiddenUnits: 64,
-    activation: 'relu', 
-    epochs: 50,
-    forecastYears: 5
-  });
-  const [mlpResults, setMlpResults] = useState(null);
+  const [trainingProgress, setTrainingProgress] = useState(null);
+  const [metrics, setMetrics] = useState(null);
+  const [model, setModel] = useState(null);
+  const [metadata, setMetadata] = useState(null);
+  const [forecastYears, setForecastYears] = useState(5);
+  const [forecasts, setForecasts] = useState(null);
 
-  useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
+  const LOOKBACK = 3;
+  const FEATURES = ['population', 'emigrants'];
+  const TARGET = 'emigrants';
 
-  const handleMLPTrain = async () => {
+  const handleTrain = async () => {
     setIsTraining(true);
-    setTrainingProgress(0);
-    
+    setTrainingProgress({ epoch: 0, loss: 0, mae: 0 });
+    setMetrics(null);
+
     try {
-      const preparedData = prepareTimeSeriesData(data, mlpConfig.lookback);
-      
-      const results = await trainMLPModel(
-        preparedData,
-        mlpConfig,
-        (progress) => setTrainingProgress(progress)
+      // 1. Data Preparation
+      let cleanedData = cleanData(data);
+      cleanedData = sortData(cleanedData);
+
+      // 2. Normalization
+      const { normalized, mins, maxs } = normalizeData(cleanedData, FEATURES);
+
+      // 3. Create sequences
+      const { X, y } = createSequences(normalized, LOOKBACK, FEATURES, TARGET);
+
+      // 4. Build model
+      const newModel = modelType === 'LSTM'
+        ? buildLSTMModel(LOOKBACK, FEATURES.length)
+        : buildMLPModel(LOOKBACK, FEATURES.length);
+
+      // 5. Train model
+      const onEpochEnd = (epoch, logs) => {
+        setTrainingProgress({
+          epoch: epoch + 1,
+          loss: logs.loss.toFixed(6),
+          mae: logs.mae.toFixed(6),
+          val_loss: logs.val_loss?.toFixed(6),
+          val_mae: logs.val_mae?.toFixed(6)
+        });
+      };
+
+      const trainFn = modelType === 'LSTM' ? trainLSTMModel : trainMLPModel;
+      await trainFn(newModel, X, y, onEpochEnd, 100, 0.2);
+
+      // 6. Make predictions on training data
+      const predictFn = modelType === 'LSTM' ? predictLSTM : predictMLP;
+      const normalizedPredictions = await predictFn(newModel, X);
+
+      // 7. Denormalize predictions
+      const predictions = normalizedPredictions.map(pred =>
+        denormalize(pred, mins[TARGET], maxs[TARGET])
       );
-      
-      setMlpResults(results);
-      setIsTraining(false);
+
+      const actualValues = y.map(val =>
+        denormalize(val, mins[TARGET], maxs[TARGET])
+      );
+
+      // 8. Calculate metrics
+      const calculatedMetrics = calculateMetrics(actualValues, predictions);
+      setMetrics(calculatedMetrics);
+
+      // 9. Save metadata
+      const newMetadata = {
+        modelType,
+        lookback: LOOKBACK,
+        features: FEATURES,
+        target: TARGET,
+        mins,
+        maxs,
+        lastYear: cleanedData[cleanedData.length - 1].year,
+        lastData: cleanedData.slice(-LOOKBACK),
+        metrics: calculatedMetrics,
+        trainedAt: new Date().toISOString()
+      };
+
+      // 10. Save model
+      const saveFn = modelType === 'LSTM' ? saveLSTMModel : saveMLPModel;
+      await saveFn(newModel, newMetadata);
+
+      setModel(newModel);
+      setMetadata(newMetadata);
+
+      alert(`${modelType} model trained successfully!\nMAE: ${calculatedMetrics.mae}\nAccuracy: ${calculatedMetrics.accuracy}%`);
     } catch (error) {
-      console.error('MLP training error:', error);
-      alert('Failed to train MLP model: ' + error.message);
+      console.error('Training error:', error);
+      alert('Error training model: ' + error.message);
+    } finally {
       setIsTraining(false);
     }
   };
 
-  if (!isOpen) return null;
+  const handleLoadModel = async () => {
+    try {
+      const loadFn = modelType === 'LSTM' ? loadLSTMModel : loadMLPModel;
+      const result = await loadFn();
 
-  return (
-    <div className="forecast-modal-overlay" onClick={onClose}>
-      <div className="forecast-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="forecast-header">
-          <div className="flex items-center gap-3">
-            <Brain size={28} className="text-blue-600" />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">
-                MLP Time Series Forecasting
-              </h2>
-              <p className="text-sm text-gray-600">
-                Train MLP model to predict future emigration trends
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="close-btn">
-            <X size={24} />
-          </button>
-        </div>
-
-        <div className="forecast-content">
-          <MLPPanel
-            config={mlpConfig}
-            setConfig={setMlpConfig}
-            results={mlpResults}
-            isTraining={isTraining}
-            trainingProgress={trainingProgress}
-            onTrain={handleMLPTrain}
-          />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const MLPPanel = ({ config, setConfig, results, isTraining, trainingProgress, onTrain }) => {
-  // Store input values as strings to allow proper editing
-  const [inputValues, setInputValues] = useState({
-    lookback: String(config.lookback),
-    hiddenUnits: String(config.hiddenUnits),
-    epochs: String(config.epochs),
-    forecastYears: String(config.forecastYears)
-  });
-
-  // Refs to track cursor position
-  const inputRefs = useRef({});
-
-  // Update input values when config changes externally
-  useEffect(() => {
-    setInputValues({
-      lookback: String(config.lookback),
-      hiddenUnits: String(config.hiddenUnits),
-      epochs: String(config.epochs),
-      forecastYears: String(config.forecastYears)
-    });
-  }, [config]);
-
-  // Handle input changes - allow all characters including empty string
-  const handleInputChange = (field, value, cursorPos) => {
-    // Store cursor position before state update
-    const savedCursor = cursorPos;
-    
-    // Allow empty string and any input for editing
-    setInputValues(prev => ({ ...prev, [field]: value }));
-    
-    // Only update config if it's a valid positive number
-    const numValue = parseInt(value, 10);
-    if (!isNaN(numValue) && numValue > 0) {
-      setConfig(prev => ({ ...prev, [field]: numValue }));
-    }
-
-    // Restore cursor position after React renders
-    requestAnimationFrame(() => {
-      if (inputRefs.current[field]) {
-        inputRefs.current[field].setSelectionRange(savedCursor, savedCursor);
+      if (result) {
+        setModel(result.model);
+        setMetadata(result.metadata);
+        setMetrics(result.metadata.metrics);
+        alert(`${modelType} model loaded successfully!`);
+      } else {
+        alert('No saved model found. Please train a model first.');
       }
-    });
+    } catch (error) {
+      console.error('Error loading model:', error);
+      alert('Error loading model: ' + error.message);
+    }
   };
 
-  // Handle blur to ensure valid values
-  const handleInputBlur = (field, min, max) => {
-    const currentValue = inputValues[field];
-    const numValue = parseInt(currentValue, 10);
-    
-    // If empty or invalid, revert to minimum
-    if (currentValue === '' || isNaN(numValue) || numValue < min) {
-      setInputValues(prev => ({ ...prev, [field]: String(min) }));
-      setConfig(prev => ({ ...prev, [field]: min }));
-    } 
-    // If exceeds maximum, cap at maximum
-    else if (numValue > max) {
-      setInputValues(prev => ({ ...prev, [field]: String(max) }));
-      setConfig(prev => ({ ...prev, [field]: max }));
-    } 
-    // Valid value - ensure it's properly formatted
-    else {
-      setInputValues(prev => ({ ...prev, [field]: String(numValue) }));
-      setConfig(prev => ({ ...prev, [field]: numValue }));
+  const handleDeleteModel = async () => {
+    if (!confirm('Are you sure you want to delete the saved model?')) return;
+
+    try {
+      const deleteFn = modelType === 'LSTM' ? deleteLSTMModel : deleteMLPModel;
+      await deleteFn();
+      setModel(null);
+      setMetadata(null);
+      setMetrics(null);
+      setForecasts(null);
+      alert('Model deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting model:', error);
+      alert('Error deleting model: ' + error.message);
+    }
+  };
+
+  const handleDownloadModel = async () => {
+    if (!model || !metadata) {
+      alert('No model to download. Please train a model first.');
+      return;
+    }
+
+    try {
+      const downloadFn = modelType === 'LSTM' ? downloadLSTMModel : downloadMLPModel;
+      await downloadFn(model, metadata);
+      alert('Model files downloaded!');
+    } catch (error) {
+      console.error('Error downloading model:', error);
+      alert('Error downloading model: ' + error.message);
+    }
+  };
+
+  const handleForecast = async () => {
+    if (!model || !metadata) {
+      alert('Please train or load a model first.');
+      return;
+    }
+
+    try {
+      const { mins, maxs, lastData } = metadata;
+      let currentSequence = lastData.map(row => ({
+        year: row.year,
+        population: row.population,
+        emigrants: row.emigrants
+      }));
+
+      const predictions = [];
+      let currentYear = metadata.lastYear;
+
+      for (let i = 0; i < forecastYears; i++) {
+        // Normalize current sequence
+        const normalized = currentSequence.map(row => ({
+          population: (row.population - mins.population) / (maxs.population - mins.population),
+          emigrants: (row.emigrants - mins.emigrants) / (maxs.emigrants - mins.emigrants)
+        }));
+
+        // Prepare input
+        const input = [normalized.map(row => FEATURES.map(f => row[f]))];
+
+        // Predict
+        const predictFn = modelType === 'LSTM' ? predictLSTM : predictMLP;
+        const normalizedPred = await predictFn(model, input);
+
+        // Denormalize
+        const predictedEmigrants = denormalize(normalizedPred[0], mins[TARGET], maxs[TARGET]);
+
+        // Estimate population growth (simple linear trend)
+        const popGrowth = currentSequence[LOOKBACK - 1].population - currentSequence[0].population;
+        const avgGrowthRate = popGrowth / (LOOKBACK - 1);
+        const nextPopulation = currentSequence[LOOKBACK - 1].population + avgGrowthRate;
+
+        currentYear++;
+        predictions.push({
+          year: currentYear.toString(),
+          emigrants: Math.round(predictedEmigrants),
+          population: parseFloat(nextPopulation.toFixed(2)),
+          isForecast: true
+        });
+
+        // Update sequence (sliding window)
+        currentSequence = [
+          ...currentSequence.slice(1),
+          {
+            year: currentYear,
+            population: nextPopulation,
+            emigrants: predictedEmigrants
+          }
+        ];
+      }
+
+      setForecasts(predictions);
+      onForecastUpdate(predictions);
+      alert(`Generated ${forecastYears} year forecast!`);
+    } catch (error) {
+      console.error('Forecasting error:', error);
+      alert('Error generating forecast: ' + error.message);
     }
   };
 
   return (
-    <div className="model-panel">
-      <div className="config-section">
-        <h3 className="section-title">Model Configuration</h3>
-        
-        <div className="config-grid">
-          <div className="config-item">
-            <label>Lookback Period</label>
-            <input
-              ref={el => inputRefs.current.lookback = el}
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={inputValues.lookback}
-              onChange={(e) => handleInputChange('lookback', e.target.value, e.target.selectionStart)}
-              onBlur={() => handleInputBlur('lookback', 3, 24)}
-              disabled={isTraining}
-              placeholder="3-24"
-              autoComplete="off"
-              spellCheck="false"
-            />
-            <span className="config-help">Number of past years to consider</span>
-          </div>
+    <div className="forecast-panel">
+      <h2>Emigrant Forecasting ({modelType})</h2>
 
-          <div className="config-item">
-            <label>Hidden Units (Neurons)</label>
-            <input
-              ref={el => inputRefs.current.hiddenUnits = el}
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={inputValues.hiddenUnits}
-              onChange={(e) => handleInputChange('hiddenUnits', e.target.value, e.target.selectionStart)}
-              onBlur={() => handleInputBlur('hiddenUnits', 16, 256)}
-              disabled={isTraining}
-              placeholder="16-256"
-              autoComplete="off"
-              spellCheck="false"
-            />
-            <span className="config-help">Number of MLP neurons</span>
-          </div>
+      <div className="model-selector">
+        <label>
+          <input
+            type="radio"
+            value="LSTM"
+            checked={modelType === 'LSTM'}
+            onChange={(e) => setModelType(e.target.value)}
+            disabled={isTraining}
+          />
+          LSTM (Long Short-Term Memory)
+        </label>
+        <label>
+          <input
+            type="radio"
+            value="MLP"
+            checked={modelType === 'MLP'}
+            onChange={(e) => setModelType(e.target.value)}
+            disabled={isTraining}
+          />
+          MLP (Multi-Layer Perceptron)
+        </label>
+      </div>
 
-                    <div className="config-item">
-            <label>Activation Function</label>
-            <select
-                value={config.activation}
-                onChange={(e) => setConfig({ ...config, activation: e.target.value })}
-                disabled={isTraining}
-            >
-                <option value="relu">ReLU</option>
-                <option value="tanh">Tanh</option>
-                <option value="sigmoid">Sigmoid</option>
-                <option value="elu">ELU</option>
-            </select>
-            <span className="config-help">
-                Non-linear activation - 
-                <span 
-                className="markdown-link"
-                onClick={() => setConfig({ ...config, activation: 'relu' })}
-                style={{ cursor: 'pointer', marginLeft: '5px', color: '#007bff' }}
-                >
-                ReLU
-                </span>
-                , 
-                <span 
-                className="markdown-link"
-                onClick={() => setConfig({ ...config, activation: 'tanh' })}
-                style={{ cursor: 'pointer', marginLeft: '5px', color: '#007bff' }}
-                >
-                Tanh
-                </span>
-                , 
-                <span 
-                className="markdown-link"
-                onClick={() => setConfig({ ...config, activation: 'sigmoid' })}
-                style={{ cursor: 'pointer', marginLeft: '5px', color: '#007bff' }}
-                >
-                Sigmoid
-                </span>
-                , 
-                <span 
-                className="markdown-link"
-                onClick={() => setConfig({ ...config, activation: 'elu' })}
-                style={{ cursor: 'pointer', marginLeft: '5px', color: '#007bff' }}
-                >
-                ELU
-                </span>
-                </span>
-            </div>
+      <div className="control-buttons">
+        <button onClick={handleTrain} disabled={isTraining}>
+          {isTraining ? 'Training...' : 'Train Model'}
+        </button>
+        <button onClick={handleLoadModel} disabled={isTraining}>
+          Load Model
+        </button>
+        <button onClick={handleDeleteModel} disabled={isTraining || !model}>
+          Delete Model
+        </button>
+        <button onClick={handleDownloadModel} disabled={isTraining || !model}>
+          Download Model
+        </button>
+      </div>
 
-          <div className="config-item">
-            <label>Training Epochs</label>
-            <input
-              ref={el => inputRefs.current.epochs = el}
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={inputValues.epochs}
-              onChange={(e) => handleInputChange('epochs', e.target.value, e.target.selectionStart)}
-              onBlur={() => handleInputBlur('epochs', 10, 200)}
-              disabled={isTraining}
-              placeholder="10-200"
-              autoComplete="off"
-              spellCheck="false"
-            />
-            <span className="config-help">Number of training iterations</span>
-          </div>
-
-          <div className="config-item">
-            <label>Forecast Years</label>
-            <input
-              ref={el => inputRefs.current.forecastYears = el}
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={inputValues.forecastYears}
-              onChange={(e) => handleInputChange('forecastYears', e.target.value, e.target.selectionStart)}
-              onBlur={() => handleInputBlur('forecastYears', 1, 10)}
-              disabled={isTraining}
-              placeholder="1-10"
-              autoComplete="off"
-              spellCheck="false"
-            />
-            <span className="config-help">Years to predict ahead</span>
-          </div>
-        </div>
-
-        <button
-          className={`train-btn ${isTraining ? 'training' : ''}`}
-          onClick={onTrain}
-          disabled={isTraining}
-        >
-          {isTraining ? (
+      {isTraining && trainingProgress && (
+        <div className="training-progress">
+          <h3>Training Progress</h3>
+          <p>Epoch: {trainingProgress.epoch} / 100</p>
+          <p>Loss: {trainingProgress.loss}</p>
+          <p>MAE: {trainingProgress.mae}</p>
+          {trainingProgress.val_loss && (
             <>
-              <div className="spinner" />
-              Training... {trainingProgress}%
-            </>
-          ) : (
-            <>
-              <Play size={20} />
-              Train MLP Model
+              <p>Val Loss: {trainingProgress.val_loss}</p>
+              <p>Val MAE: {trainingProgress.val_mae}</p>
             </>
           )}
-        </button>
-
-        {isTraining && (
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${trainingProgress}%` }} />
-          </div>
-        )}
-      </div>
-
-      {results && <ResultsPanel results={results} modelType="MLP" />}
-    </div>
-  );
-};
-
-const ResultsPanel = ({ results, modelType }) => {
-  return (
-    <div className="results-section">
-      <h3 className="section-title">Training Results</h3>
-      
-      <div className="metrics-grid">
-        <div className="metric-card">
-          <span className="metric-label">Model Type</span>
-          <span className="metric-value">{modelType}</span>
-        </div>
-        
-        <div className="metric-card">
-          <span className="metric-label">Lookback</span>
-          <span className="metric-value">{results.config.lookback} years</span>
-        </div>
-        
-        <div className="metric-card">
-          <span className="metric-label">Hidden Units</span>
-          <span className="metric-value">{results.config.hiddenUnits}</span>
-        </div>
-        
-        <div className="metric-card">
-          <span className="metric-label">Activation</span>
-          <span className="metric-value">{results.config.activation.toUpperCase()}</span>
-        </div>
-        
-        <div className="metric-card highlight">
-          <span className="metric-label">MAE</span>
-          <span className="metric-value">{results.mae.toFixed(4)}</span>
-        </div>
-        
-        <div className="metric-card highlight">
-          <span className="metric-label">Accuracy</span>
-          <span className="metric-value">{results.accuracy.toFixed(2)}%</span>
-        </div>
-      </div>
-
-      <div className="chart-section">
-        <h4 className="chart-title">Forecast Visualization</h4>
-        <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={results.chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="year" label={{ value: 'Year', position: 'insideBottom', offset: -5 }} />
-            <YAxis label={{ value: 'Emigrants', angle: -90, position: 'insideLeft' }} />
-            <Tooltip />
-            <Legend />
-            <Line type="monotone" dataKey="actual" stroke="#8884d8" strokeWidth={2} name="Historical Data" dot={{ r: 4 }} />
-            <Line type="monotone" dataKey="predicted" stroke="#82ca9d" strokeWidth={2} strokeDasharray="5 5" name="Forecast" dot={{ r: 4 }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {results.history && (
-        <div className="chart-section">
-          <h4 className="chart-title">Training Loss History</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={results.history}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="epoch" label={{ value: 'Epoch', position: 'insideBottom', offset: -5 }} />
-              <YAxis label={{ value: 'Loss', angle: -90, position: 'insideLeft' }} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="loss" stroke="#ff7300" strokeWidth={2} name="Training Loss" />
-            </LineChart>
-          </ResponsiveContainer>
         </div>
       )}
+
+      {metrics && !isTraining && (
+        <div className="metrics">
+          <h3>Model Performance Metrics</h3>
+          <div className="metrics-grid">
+            <div className="metric-item">
+              <span className="metric-label">MAE:</span>
+              <span className="metric-value">{metrics.mae}</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">RMSE:</span>
+              <span className="metric-value">{metrics.rmse}</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">MAPE:</span>
+              <span className="metric-value">{metrics.mape}%</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">R²:</span>
+              <span className="metric-value">{metrics.r2}</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">Accuracy:</span>
+              <span className="metric-value">{metrics.accuracy}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {model && !isTraining && (
+        <div className="forecast-controls">
+          <h3>Generate Forecast</h3>
+          <div className="forecast-input">
+            <label>
+              Years to forecast:
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={forecastYears}
+                onChange={(e) => setForecastYears(parseInt(e.target.value))}
+              />
+            </label>
+            <button onClick={handleForecast}>Generate Forecast</button>
+          </div>
+        </div>
+      )}
+
+      {forecasts && (
+        <div className="forecast-results">
+          <h3>Forecast Results</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Predicted Emigrants</th>
+                <th>Estimated Population (M)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {forecasts.map((f, i) => (
+                <tr key={i}>
+                  <td>{f.year}</td>
+                  <td>{f.emigrants.toLocaleString()}</td>
+                  <td>{f.population.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="info-box">
+        <h4>Model Configuration</h4>
+        <ul>
+          <li>Lookback window: {LOOKBACK} years</li>
+          <li>Input features: Population, Emigrants</li>
+          <li>Target: Emigrants (next year)</li>
+          <li>Normalization: Min-Max [0, 1]</li>
+          <li>Epochs: 100</li>
+          <li>Validation split: 20%</li>
+        </ul>
+      </div>
     </div>
   );
-};
-
-export default ForecastPanel;
+}
