@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { cleanData, sortData, normalizeData, denormalize, createSequences, calculateMetrics } from '../utils/dataPreparation';
+import { cleanData, sortData, normalizeData, denormalize, createSequences, calculateMetrics, DEFAULT_PREPARATION_OPTIONS } from '../utils/dataPreparation';
 import { buildLSTMModel, trainLSTMModel, predictLSTM, saveLSTMModel, loadLSTMModel, deleteLSTMModel, downloadLSTMModel } from '../models/lstmModel';
 import './ForecastPanel.css';
 
@@ -10,6 +10,7 @@ export default function LSTMForecast({ data }) {
   const [metrics, setMetrics] = useState(null);
   const [model, setModel] = useState(null);
   const [metadata, setMetadata] = useState(null);
+  const [prepSummary, setPrepSummary] = useState(null);
   const [forecastYears, setForecastYears] = useState(5);
   const [forecasts, setForecasts] = useState([]);
   const [validationResults, setValidationResults] = useState([]);
@@ -17,6 +18,14 @@ export default function LSTMForecast({ data }) {
   const LOOKBACK = 3;
   const FEATURES = ['emigrants'];
   const TARGET = 'emigrants';
+  const PREPARATION = {
+    ...DEFAULT_PREPARATION_OPTIONS,
+    features: FEATURES,
+    target: TARGET,
+    yearKey: 'year',
+    dropInvalid: true,
+    allowNegative: []
+  };
 
   const handleTrain = async () => {
     setIsTraining(true);
@@ -24,8 +33,17 @@ export default function LSTMForecast({ data }) {
     setMetrics(null);
 
     try {
-      let cleanedData = cleanData(data);
-      cleanedData = sortData(cleanedData);
+      const { rows: cleanedRows, issues, discardedCount } = cleanData(data, PREPARATION);
+
+      if (issues.length) {
+        console.warn('LSTM preparation issues detected:', issues);
+      }
+
+      if (cleanedRows.length <= LOOKBACK) {
+        throw new Error('Not enough valid rows after cleaning to train the LSTM model.');
+      }
+
+      const cleanedData = sortData(cleanedRows, PREPARATION.yearKey);
 
       const { normalized, mins, maxs } = normalizeData(cleanedData, FEATURES);
       const { X, y } = createSequences(normalized, LOOKBACK, FEATURES, TARGET);
@@ -77,7 +95,13 @@ export default function LSTMForecast({ data }) {
         lastYear: cleanedData[cleanedData.length - 1].year,
         lastData: cleanedData.slice(-LOOKBACK),
         metrics: calculatedMetrics,
-        trainedAt: new Date().toISOString()
+        trainedAt: new Date().toISOString(),
+        preparation: {
+          ...PREPARATION,
+          issueCount: issues.length,
+          discardedCount,
+          totalRows: data.length
+        }
       };
 
       await saveLSTMModel(newModel, newMetadata);
@@ -101,6 +125,12 @@ export default function LSTMForecast({ data }) {
         setModel(result.model);
         setMetadata(result.metadata);
         setMetrics(result.metadata.metrics);
+        if (result.metadata.preparation) {
+          const { issueCount = 0, discardedCount = 0, totalRows } = result.metadata.preparation;
+          setPrepSummary({ issueCount, discardedCount, totalRows });
+        } else {
+          setPrepSummary(null);
+        }
         alert('LSTM model loaded successfully!');
       } else {
         alert('No saved model found. Please train a model first.');
@@ -120,6 +150,7 @@ export default function LSTMForecast({ data }) {
       setMetadata(null);
       setMetrics(null);
       setForecasts([]);
+      setPrepSummary(null);
       alert('LSTM model deleted successfully!');
     } catch (error) {
       console.error('Error deleting model:', error);

@@ -7,8 +7,11 @@ import DynamicMap from "./components/DynamicMap";
 import StatusCombinedChart from "./components/StatusCombinedChart";
 import DataTable from "./components/DataTable";
 import ForecastPanel from "./components/ForecastPanel"; 
+import ForecastModal from "./components/ForecastModal";
 import useDynamicSchema from "./hooks/useDynamicSchema";
 import ExportPanel from "./components/ExportPanel";
+import { cleanData, DEFAULT_PREPARATION_OPTIONS } from "./utils/dataPreparation";
+
 import { 
   BarChart3, Database, AlertCircle, CheckCircle2, Loader2, 
   FileSpreadsheet, TrendingUp, Upload, Download, 
@@ -34,14 +37,15 @@ const hasPermission = (role, permission) => {
   return PERMISSIONS[role?.toUpperCase()]?.includes(permission) || false;
 };
 
-const getCollectionNameFromCsv = (rows = [], fallback = "emigrants") => {
-  if (!Array.isArray(rows) || rows.length === 0) return fallback;
-  const firstRow = rows[0];
-  const columns = Object.keys(firstRow || {});
-  if (!columns || columns.length === 0) return fallback;
-  const firstColumnName = columns[0];
-  if (!firstColumnName) return fallback;
-  return firstColumnName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "").trim() || fallback;
+const normalizeCollectionName = (rawName = "") => {
+  if (!rawName) return "emigrants";
+  return rawName
+    .trim()
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase() || "emigrants";
 };
 
 const App = () => {
@@ -51,6 +55,7 @@ const App = () => {
   
   // ========== DASHBOARD STATE ==========
   const [csvData, setCsvData] = useState([]);
+  const [activeCollection, setActiveCollection] = useState("emigrants");
   const [uploadStatus, setUploadStatus] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isForecastOpen, setIsForecastOpen] = useState(false);
@@ -61,8 +66,7 @@ const App = () => {
   const fileInputRef = useRef(null);
   
   // ========== DATA HOOK ==========
-  const collectionName = useMemo(() => getCollectionNameFromCsv(csvData), [csvData]);
-  const { data, schema, types, loading, error, setData, datasetName } = useDynamicSchema(csvData, collectionName);
+  const { data, schema, types, loading, error, setData, datasetName } = useDynamicSchema(csvData, activeCollection);
   
   // ========== USER STATE ==========
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -144,6 +148,7 @@ const App = () => {
       setUserRole(null);
       setUserEmail('');
       setCsvData([]);
+      setActiveCollection("emigrants");
       
       console.log('✅ User logged out successfully');
     } catch (error) {
@@ -161,7 +166,7 @@ const App = () => {
     
     try {
       const { clearCollection } = await import('./services/firestoreService');
-      await clearCollection();
+      await clearCollection(activeCollection);
       setCsvData([]);
       setData([]);
       setUploadStatus(null);
@@ -173,15 +178,15 @@ const App = () => {
   };
 
   // ========== CSV UPLOAD HANDLER ==========
-  const handleCsvUpload = async (rows) => {
+  const handleCsvUpload = async (rows, info = {}) => {
     if (!hasPermission(userRole, 'upload_data')) {
       alert('Permission denied: Only administrators can upload data.');
       return;
     }
-    
+
     try {
       setUploadStatus("uploading");
-      
+
       const processedRows = rows.map(row => {
         const processedRow = {};
         Object.keys(row).forEach(key => {
@@ -194,18 +199,21 @@ const App = () => {
         });
         return processedRow;
       });
-      
+
+      const targetCollection = normalizeCollectionName(info.collectionName || info.originalFileName || datasetName || activeCollection);
+
+      setActiveCollection(targetCollection);
       setCsvData(processedRows);
-      
+
       const { overwriteCollection } = await import('./services/firestoreService');
-      await overwriteCollection(processedRows);
+      await overwriteCollection(processedRows, true, targetCollection);
       setUploadStatus("success");
-      
+
       setTimeout(() => {
         setCsvData([]);
         setUploadStatus(null);
       }, 3000);
-      
+
     } catch (err) {
       console.error("Failed to upload CSV:", err);
       setUploadStatus("error");
@@ -214,12 +222,58 @@ const App = () => {
   };
 
   // ========== DASHBOARD STATISTICS ==========
+  const detectedYearColumn = useMemo(() => {
+    const explicitYear = schema.find((col) => col.toLowerCase() === 'year');
+    if (explicitYear) return explicitYear;
+    const typedYear = schema.find((col) => types[col] === 'year');
+    if (typedYear) return typedYear;
+    return DEFAULT_PREPARATION_OPTIONS.yearKey;
+  }, [schema, types]);
+
+  const numericFeatureColumns = useMemo(() => {
+    return schema.filter((col) => types[col] === 'number' && col !== detectedYearColumn);
+  }, [schema, types, detectedYearColumn]);
+
+  const displayPreparationConfig = useMemo(() => ({
+    yearKey: detectedYearColumn || DEFAULT_PREPARATION_OPTIONS.yearKey,
+    target: null,
+    features: numericFeatureColumns,
+    dropInvalid: false,
+    allowNegative: numericFeatureColumns
+  }), [detectedYearColumn, numericFeatureColumns]);
+
+  const displayPreparation = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) {
+      return { rows: [], issues: [], discardedCount: 0 };
+    }
+
+    try {
+      const result = cleanData(data, displayPreparationConfig);
+      return result;
+    } catch (prepError) {
+      console.error('Display preparation error:', prepError);
+      return { rows: data, issues: [{ type: 'error', message: prepError.message }], discardedCount: 0 };
+    }
+  }, [data, displayPreparationConfig]);
+
+  const preparedData = displayPreparation.rows;
+  const preparationIssues = displayPreparation.issues;
+
+  const validationSummary = useMemo(() => {
+    if (!preparationIssues.length) return null;
+    const affectedRows = new Set(preparationIssues.map((issue) => issue.rowIndex));
+    return {
+      totalIssues: preparationIssues.length,
+      affectedRows: affectedRows.size
+    };
+  }, [preparationIssues]);
+
   const stats = useMemo(() => {
     return {
-      total: data.length,
+      total: preparedData.length,
       columns: schema.length
     };
-  }, [data, schema]);
+  }, [preparedData, schema]);
 
   const roleLabel = useMemo(() => {
     switch (userRole) {
@@ -241,7 +295,8 @@ const App = () => {
   }, [userRole]);
 
   const isPrivileged = userRole === 'super-admin' || userRole === 'admin';
-  const hasData = data && data.length > 0;
+  const hasData = preparedData && preparedData.length > 0;
+
   const greetingName = userEmail || 'Explorer';
 
   // ========== STATUS COLUMN DETECTION ==========
@@ -279,10 +334,10 @@ const App = () => {
   // ========== FILTERED DATA ==========
   const filteredData = useMemo(() => {
     if (minYear === null && maxYear === null) {
-      return data;
+      return preparedData;
     }
     
-    return data.filter(record => {
+    return preparedData.filter(record => {
       const recordYear = record.year;
       
       if (recordYear === null || recordYear === undefined) {
@@ -301,13 +356,13 @@ const App = () => {
       
       return true;
     });
-  }, [data, minYear, maxYear]);
+  }, [preparedData, minYear, maxYear]);
 
   // ========== YEAR RANGE DETECTION ==========
   const yearRange = useMemo(() => {
-    if (data.length === 0) return { min: null, max: null };
+    if (preparedData.length === 0) return { min: null, max: null };
     
-    const years = data
+    const years = preparedData
       .map(record => record.year)
       .filter(year => year && year !== 0)
       .sort((a, b) => a - b);
@@ -316,7 +371,7 @@ const App = () => {
       min: years.length > 0 ? years[0] : null,
       max: years.length > 0 ? years[years.length - 1] : null
     };
-  }, [data]);
+  }, [preparedData]);
 
   // ========== RENDER LOGIN FORM ==========
   if (!isAuthenticated) {
@@ -562,12 +617,23 @@ const App = () => {
                 </div>
               </div>
 
+              {validationSummary && (
+                <div className="info-banner info-banner--warning" style={{ marginBottom: '1rem' }}>
+                  <AlertCircle size={20} />
+                  <div>
+                    <strong>Validation flagged {validationSummary.totalIssues} issues across {validationSummary.affectedRows} rows.</strong>
+                    <div>Non-numeric or missing values are normalized to 0 for visualization until corrected.</div>
+                  </div>
+                </div>
+              )}
+
               <DataTable
-                data={data}
+                data={preparedData}
                 setData={setData}
                 schema={schema}
                 types={types}
                 userRole={userRole}
+                datasetName={activeCollection}
               />
             </section>
           </>
@@ -681,7 +747,7 @@ const App = () => {
                   </div>
                   <div className="section-toolbar" style={{ marginTop: '0.75rem' }}>
                     <span className="stat-card__meta">
-                      Showing {filteredData.length} of {data.length} records.
+                      Showing {filteredData.length} of {preparedData.length} records.
                     </span>
                     {(minYear !== null || maxYear !== null) && (
                       <button
@@ -773,24 +839,15 @@ const App = () => {
         )}
       </div>
 
-      {isForecastOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-4">
-              <button
-                onClick={() => setIsForecastOpen(false)}
-                className="float-right text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-              <ForecastPanel
-                data={filteredData}
-                onForecastUpdate={setForecasts}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <ForecastModal
+        open={isForecastOpen}
+        onClose={() => setIsForecastOpen(false)}
+      >
+        <ForecastPanel
+          data={filteredData}
+          onForecastUpdate={setForecasts}
+        />
+      </ForecastModal>
 
       {showExportPanel && (
         <ExportPanel

@@ -11,22 +11,30 @@ import * as tf from '@tensorflow/tfjs';
  * - Optimizer: Adam (lr=0.001)
  * - Metrics: MAE (Mean Absolute Error)
  */
-export function buildLSTMModel(lookback = 10, features = 2) {
+export function buildLSTMModel(lookback = 10, features = 2, options = {}) {
+  const {
+    layerUnits = [60, 60],
+    dropout = 0,
+    learningRate = 0.001
+  } = options;
+
   const model = tf.sequential();
+  const unitsArray = Array.isArray(layerUnits) && layerUnits.length > 0 ? layerUnits : [layerUnits || 60];
+  const safeDropout = typeof dropout === 'number' ? Math.min(Math.max(dropout, 0), 0.8) : 0;
 
-  // First LSTM layer
-  model.add(tf.layers.lstm({
-    units: 60,
-    returnSequences: true,
-    inputShape: [lookback, features],
-    dropout: 0
-  }));
+  unitsArray.forEach((units, index) => {
+    const layerConfig = {
+      units,
+      returnSequences: index < unitsArray.length - 1,
+      dropout: safeDropout
+    };
 
-  // Second LSTM layer
-  model.add(tf.layers.lstm({
-    units: 60,
-    dropout: 0
-  }));
+    if (index === 0) {
+      layerConfig.inputShape = [lookback, features];
+    }
+
+    model.add(tf.layers.lstm(layerConfig));
+  });
 
   // Output layer
   model.add(tf.layers.dense({
@@ -35,7 +43,7 @@ export function buildLSTMModel(lookback = 10, features = 2) {
 
   // Compile model
   model.compile({
-    optimizer: tf.train.adam(0.001),
+    optimizer: tf.train.adam(learningRate),
     loss: 'meanSquaredError',
     metrics: ['mae']
   });
@@ -67,7 +75,7 @@ export async function trainLSTMModel(model, X, y, onEpochEnd, epochs = 100, vali
     validationSplit,
     callbacks: {
       onEpochEnd: async (epoch, logs) => {
-        if (onEpochEnd && epoch % 20 === 0) {
+        if (onEpochEnd) {
           onEpochEnd(epoch, logs);
         }
       }

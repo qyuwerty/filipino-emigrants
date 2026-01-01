@@ -11,27 +11,31 @@ import * as tf from '@tensorflow/tfjs';
  * - Optimizer: Adam (lr=0.001)
  * - Metrics: MAE (Mean Absolute Error)
  */
-export function buildMLPModel(lookback = 10, features = 2) {
+export function buildMLPModel(lookback = 10, features = 2, options = {}) {
+  const {
+    hiddenUnits = [64, 32],
+    dropout = 0.2,
+    activation = 'relu',
+    learningRate = 0.001
+  } = options;
+
   const model = tf.sequential();
 
   const inputSize = lookback * features;
+  const unitsArray = Array.isArray(hiddenUnits) && hiddenUnits.length > 0 ? hiddenUnits : [hiddenUnits || 64];
+  const safeDropout = typeof dropout === 'number' ? Math.min(Math.max(dropout, 0), 0.8) : 0;
 
-  // First Dense layer
-  model.add(tf.layers.dense({
-    units: 59,
-    activation: 'tanh',
-    inputShape: [inputSize]
-  }));
+  unitsArray.forEach((units, index) => {
+    model.add(tf.layers.dense({
+      units,
+      activation,
+      inputShape: index === 0 ? [inputSize] : undefined
+    }));
 
-  model.add(tf.layers.dropout({ rate: 0.2 }));
-
-  // Second Dense layer
-  model.add(tf.layers.dense({
-    units: 59,
-    activation: 'tanh'
-  }));
-
-  model.add(tf.layers.dropout({ rate: 0.2 }));
+    if (safeDropout > 0) {
+      model.add(tf.layers.dropout({ rate: safeDropout }));
+    }
+  });
 
   // Output layer
   model.add(tf.layers.dense({
@@ -40,7 +44,7 @@ export function buildMLPModel(lookback = 10, features = 2) {
 
   // Compile model
   model.compile({
-    optimizer: tf.train.adam(0.001),
+    optimizer: tf.train.adam(learningRate),
     loss: 'meanSquaredError',
     metrics: ['mae']
   });
@@ -84,7 +88,7 @@ export async function trainMLPModel(model, X, y, onEpochEnd, epochs = 100, valid
     validationSplit,
     callbacks: {
       onEpochEnd: async (epoch, logs) => {
-        if (onEpochEnd && epoch % 20 === 0) {
+        if (onEpochEnd) {
           onEpochEnd(epoch, logs);
         }
       }

@@ -1,0 +1,93 @@
+.forecast-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  z-index: 1000;
+}
+
+.forecast-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(16px);
+  opacity: 0.98;
+}
+
+.forecast-modal__dialog {
+  position: relative;
+  width: min(960px, 100%);
+  max-height: 90vh;
+  overflow: hidden;
+  border-radius: 28px;
+  background: linear-gradient(145deg, rgba(248, 250, 252, 0.98), rgba(148, 163, 184, 0.1)), #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 40px 120px -40px rgba(15, 23, 42, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.25);
+  display: flex;
+  flex-direction: column;
+  transition: transform 220ms ease, opacity 220ms ease;
+  animation: modal-pop 220ms ease;
+}
+
+.forecast-modal__content {
+  overflow-y: auto;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.forecast-modal__close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(248, 250, 252, 0.85);
+  color: rgba(15, 23, 42, 0.75);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 200ms ease, border-color 200ms ease, background 200ms ease;
+  z-index: 2;
+}
+
+.forecast-modal__close:hover,
+.forecast-modal__close:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 40px -28px rgba(15, 23, 42, 0.65);
+  border-color: rgba(14, 165, 233, 0.4);
+  background: rgba(226, 232, 240, 0.92);
+  outline: none;
+}
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .forecast-modal {
+    padding: 1rem;
+  }
+
+  .forecast-modal__dialog {
+    border-radius: 20px;
+  }
+
+  .forecast-modal__content {
+    padding: 1.25rem;
+  }
+
+  .forecast-modal__close {
+    width: 40px;
+    height: 40px;
+  }
+}

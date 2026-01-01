@@ -140,6 +140,39 @@ const TableInput = ({
 
 
 // Utility Functions
+
+// Format header names for display - handles dashes, underscores, slashes, commas, & signs, and spaces
+const formatHeaderName = (name) => {
+  if (!name || typeof name !== 'string') return name;
+  
+  // Replace underscores with spaces first
+  let formatted = name.replace(/_/g, ' ');
+  
+  // Capitalize first letter of each word, preserving symbols (dash, comma, slash, &)
+  // Split by spaces but keep the symbols intact
+  formatted = formatted
+    .split(' ')
+    .map(word => {
+      // Handle words with symbols inside them (e.g., "live-in", "male/female")
+      // Capitalize first letter of each part separated by dash, slash, or after &
+      return word
+        .split(/(-|\/|,|&)/)
+        .map((part, idx) => {
+          // Keep separators as-is
+          if (['-', '/', ',', '&'].includes(part)) return part;
+          // Capitalize first letter of each part
+          if (part.length > 0) {
+            return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+          }
+          return part;
+        })
+        .join('');
+    })
+    .join(' ');
+  
+  return formatted;
+};
+
 const formatCell = (value) => {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") {
@@ -250,10 +283,20 @@ const DataTable = ({ data = [], setData = () => {}, userRole = 'user', datasetNa
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingRowId, setDeletingRowId] = useState(null);
 
-  const totalPages = Math.ceil(data.length / rowsPerPage);
+  // Sort data by year ascending for chronological display
+  const sortedData = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) return [];
+    return [...data].sort((a, b) => {
+      const yearA = typeof a.year === 'number' ? a.year : Number(a.year) || 0;
+      const yearB = typeof b.year === 'number' ? b.year : Number(b.year) || 0;
+      return yearA - yearB;
+    });
+  }, [data]);
+
+  const totalPages = Math.ceil(sortedData.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
-  const paginatedData = useMemo(() => data.slice(startIndex, endIndex), [data, startIndex, endIndex]);
+  const paginatedData = useMemo(() => sortedData.slice(startIndex, endIndex), [sortedData, startIndex, endIndex]);
   
   const currentPageYearData = useMemo(() => {
     return getYearColumnData(paginatedData);
@@ -327,17 +370,17 @@ const handleReset = async () => {
     setIsResetting(true);
     setOperationMessage("");
 
-    await clearCollection();
+    await clearCollection(datasetName);
     setData([]);
     setNewRow(createBlankRow());
     setCurrentPage(1);
     setEditRowIndex(null);
     setErrors({});
 
-    setOperationMessage("✅ All records have been cleared");
+    setOperationMessage(" All records have been cleared");
   } catch (error) {
     console.error("Error resetting data:", error);
-    setOperationMessage(`❌ Failed to reset data: ${error.message}`);
+    setOperationMessage(` Failed to reset data: ${error.message}`);
   } finally {
     setIsResetting(false);
     setTimeout(() => setOperationMessage(""), 3000);
@@ -347,7 +390,7 @@ const handleReset = async () => {
 const handleEdit = (index) => {
   // Don't allow editing multiple rows at once
   if (editRowIndex !== null) {
-    setOperationMessage("⚠️ Please save or cancel the current edit first");
+    setOperationMessage(" Please save or cancel the current edit first");
     setTimeout(() => setOperationMessage(""), 2000);
     return;
   }
@@ -360,15 +403,16 @@ const handleEdit = (index) => {
 };
   
 const handleSaveEdit = async (index) => {
-  const globalIndex = startIndex + index;
-  const row = data[globalIndex]; // This gets the CURRENT edited data from state
+  // Get the row from sorted/paginated data
+  const row = paginatedData[index];
+  if (!row) return;
   
-  // Validate the CURRENT row data (which includes user edits)
+  // Validate the row data
   const { errors: validationErrors, preparedData } = validateAndPrepareData(row, false);
   
   if (Object.keys(validationErrors).length > 0) {
     setErrors(validationErrors);
-    setOperationMessage("⚠️ Please fix validation errors");
+    setOperationMessage(" Please fix validation errors");
     setTimeout(() => setOperationMessage(""), 3000);
     return;
   }
@@ -379,28 +423,28 @@ const handleSaveEdit = async (index) => {
     // Send the preparedData to Firestore (without the id field)
     const { id, ...dataToSave } = preparedData;
     
-    console.log("Saving to Firestore:", dataToSave); // Debug log
+    console.log("Saving to Firestore:", dataToSave);
     
-    await updateRecord(row.id, dataToSave);
+    await updateRecord(row.id, dataToSave, datasetName);
     
-    // Update local state with the prepared data
-    const updatedDataArray = [...data];
-    updatedDataArray[globalIndex] = {
-      id: row.id, // Keep the id
-      ...preparedData // Use preparedData which has properly formatted values
-    };
+    // Update local state - find by ID in original data
+    const originalIndex = data.findIndex(d => d.id === row.id);
+    if (originalIndex !== -1) {
+      const updatedDataArray = [...data];
+      updatedDataArray[originalIndex] = { id: row.id, ...preparedData };
+      setData(updatedDataArray);
+    }
     
-    setData(updatedDataArray);
     setEditRowIndex(null);
     setEditingField(null);
     setErrors({});
-    setOperationMessage("✅ Record updated successfully!");
+    setOperationMessage(" Record updated successfully!");
     
     setTimeout(() => setOperationMessage(""), 2000);
     
   } catch (error) {
     console.error("Error updating record:", error);
-    setOperationMessage(`❌ Failed to update: ${error.message}`);
+    setOperationMessage(` Failed to update: ${error.message}`);
     setTimeout(() => setOperationMessage(""), 3000);
   } finally {
     setSavingRowId(null);
@@ -408,31 +452,32 @@ const handleSaveEdit = async (index) => {
 };
   
 const handleDelete = async (index) => {
-  const globalIndex = startIndex + index;
-  const row = data[globalIndex];
+  // Get the row from sorted/paginated data
+  const row = paginatedData[index];
+  if (!row) return;
   
   if (!window.confirm("Are you sure you want to delete this record?")) {
     return;
   }
   
   try {
-    setDeletingRowId(row.id); // Lock only THIS row's delete button
+    setDeletingRowId(row.id);
     
-    await deleteRecord(row.id);
+    await deleteRecord(row.id, datasetName);
     
-    const updated = [...data];
-    updated.splice(globalIndex, 1);
+    // Remove from original data by ID
+    const updated = data.filter(d => d.id !== row.id);
     setData(updated);
     
-    setOperationMessage("✅ Record deleted successfully!");
+    setOperationMessage(" Record deleted successfully!");
     setTimeout(() => setOperationMessage(""), 2000);
     
   } catch (error) {
     console.error("Error deleting record:", error);
-    setOperationMessage(`❌ Failed to delete: ${error.message}`);
+    setOperationMessage(` Failed to delete: ${error.message}`);
     setTimeout(() => setOperationMessage(""), 3000);
   } finally {
-    setDeletingRowId(null); // Always unlock
+    setDeletingRowId(null);
   }
 };
   
@@ -450,7 +495,7 @@ const handleAdd = async () => {
       if (!yearValue && yearValue !== 0) {
         console.log("Year validation FAILED: Year is required");
         setErrors({ [yearColumn]: "Year is required" });
-        setOperationMessage("⚠️ Year is required");
+        setOperationMessage(" Year is required");
         setTimeout(() => setOperationMessage(""), 3000);
         return;
       }
@@ -459,7 +504,7 @@ const handleAdd = async () => {
       if (isNaN(yearNum) || yearNum < 1900 || yearNum > 2100) {
         console.log("Year validation FAILED: Invalid year range");
         setErrors({ [yearColumn]: "Year must be between 1900-2100" });
-        setOperationMessage("⚠️ Invalid year");
+        setOperationMessage(" Invalid year");
         setTimeout(() => setOperationMessage(""), 3000);
         return;
       }
@@ -482,16 +527,16 @@ const handleAdd = async () => {
     if (Object.keys(fieldErrors).length > 0) {
       console.log("Field validation FAILED:", fieldErrors);
       setErrors(fieldErrors);
-      setOperationMessage("⚠️ Please fix validation errors");
+      setOperationMessage(" Please fix validation errors");
       setTimeout(() => setOperationMessage(""), 3000);
       return;
     }
     
-    console.log("✅ All validations passed");
+    console.log(" All validations passed");
     
     // Start adding
     setIsAddingNew(true);
-    console.log("🔄 isAddingNew set to TRUE");
+    console.log(" isAddingNew set to TRUE");
     
     // Prepare data
     const dataToSave = { ...newRow };
@@ -513,12 +558,12 @@ const handleAdd = async () => {
       if (dataToSave[key] === "") delete dataToSave[key];
     });
     
-    console.log("📦 Data prepared for Firestore:", dataToSave);
+    console.log(" Data prepared for Firestore:", dataToSave);
     
     // Add to Firestore
-    console.log("🔥 Calling addRecord...");
-    const addedRecord = await addRecord(dataToSave);
-    console.log("✅ addRecord returned:", addedRecord);
+    console.log(" Calling addRecord...");
+    const addedRecord = await addRecord(dataToSave, datasetName);
+    console.log(" addRecord returned:", addedRecord);
     
     if (!addedRecord?.id) {
       throw new Error("Failed to get record ID from Firestore");
@@ -584,13 +629,19 @@ const handleCellChange = (rowIndex, field, value, isNewRow = false) => {
       });
     }
   } else {
-    const globalIndex = startIndex + rowIndex;
-    const updatedData = [...data];
-    updatedData[globalIndex] = {
-      ...updatedData[globalIndex],
-      [field]: value
-    };
-    setData(updatedData);
+    // Get row from paginated data and find by ID in original data
+    const row = paginatedData[rowIndex];
+    if (row) {
+      const originalIndex = data.findIndex(d => d.id === row.id);
+      if (originalIndex !== -1) {
+        const updatedData = [...data];
+        updatedData[originalIndex] = {
+          ...updatedData[originalIndex],
+          [field]: value
+        };
+        setData(updatedData);
+      }
+    }
   }
   
   setEditingField({ rowIndex, field });
@@ -772,7 +823,7 @@ const handleCellChange = (rowIndex, field, value, isNewRow = false) => {
               <tr>
                 {allColumns.map((col) => (
                   <th key={col} className="text-base font-bold">
-                    {col}
+                    {formatHeaderName(col)}
                     {col === yearColumn && (
                       <span className="ml-2 text-xs font-normal text-blue-400">(Year Column - Read Only)</span>
                     )}

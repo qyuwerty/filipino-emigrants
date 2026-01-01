@@ -207,12 +207,14 @@ const generateSchema = (data) => {
     });
   });
 
-  let columns = Array.from(allColumns);
+  // Sort columns alphabetically for consistent ordering
+  let columns = Array.from(allColumns).sort((a, b) => 
+    a.toLowerCase().localeCompare(b.toLowerCase())
+  );
   const types = {};
 
-  // Detect and prioritize Year column (first column or column named "year")
-  const firstColumn = columns[0];
-  const yearColumnName = columns.find(c => c.toLowerCase() === 'year') || firstColumn;
+  // Detect and prioritize Year column
+  const yearColumnName = columns.find(c => c.toLowerCase() === 'year') || columns[0];
   
   // Check if first column or "year" column contains year values
   const yearColumnValues = data.map((r) => r[yearColumnName]).filter((v) => v !== undefined);
@@ -259,14 +261,27 @@ const useDynamicSchema = (initialCsv = [], datasetName = "emigrants") => {
   const [error, setError] = useState(null);
   const [localData, setLocalData] = useState([]);
 
-  // Firestore real-time subscription to 'emigrants'
+  // Firestore real-time subscription - document ID is the year
   useEffect(() => {
     setLoading(true);
-    const collectionRef = collection(db, datasetName || "emigrants");
+    const targetCollection = datasetName || "emigrants";
+    console.log("[useDynamicSchema] Subscribing to collection:", targetCollection);
+    
+    const collectionRef = collection(db, targetCollection);
     const unsub = onSnapshot(
       collectionRef,
       (snapshot) => {
-        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        // Reconstruct year from document ID (year is not stored as a field)
+        const docs = snapshot.docs.map((d) => {
+          const docId = d.id;
+          const yearNum = Number(docId);
+          return {
+            id: docId,
+            year: Number.isNaN(yearNum) ? docId : yearNum,
+            ...d.data()
+          };
+        });
+        console.log("[useDynamicSchema] Fetched docs:", docs.length, "from", targetCollection);
         setFirestoreData(sortRowsByYear(docs));
         setLocalData([]);
         setLoading(false);

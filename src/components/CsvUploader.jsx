@@ -28,6 +28,12 @@ import React, { useState, useRef } from "react";
 import Papa from "papaparse";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, X, Lock } from "lucide-react";
 
+const deriveCollectionNameFromFile = (fileName = "") => {
+  if (!fileName) return "";
+  const withoutExtension = fileName.replace(/\.[^/.]+$/, "");
+  return withoutExtension.trim().replace(/\s+/g, "_");
+};
+
 const CsvUploader = ({ onCsvData, onClearData, userRole, isAuthenticated }) => {
   // ========== STATE MANAGEMENT ==========
   const [fileName, setFileName] = useState("");
@@ -112,6 +118,8 @@ const CsvUploader = ({ onCsvData, onClearData, userRole, isAuthenticated }) => {
     }
 
     setFileName(file.name);
+    const derivedCollectionName = deriveCollectionNameFromFile(file.name);
+
     setError(null);
     setIsUploading(true);
 
@@ -195,7 +203,10 @@ const CsvUploader = ({ onCsvData, onClearData, userRole, isAuthenticated }) => {
         }
 
         if (onCsvData) {
-          onCsvData(processedData);
+          onCsvData(processedData, {
+            collectionName: derivedCollectionName || null,
+            originalFileName: file.name
+          });
         }
 
         e.target.value = null;

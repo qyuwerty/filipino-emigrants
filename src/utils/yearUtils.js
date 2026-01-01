@@ -76,7 +76,11 @@ export const getColumnsWithYearFirst = (data) => {
     });
   });
   
-  let allColumns = Array.from(columns);
+  // Convert to array and sort alphabetically for consistent ordering
+  let allColumns = Array.from(columns).sort((a, b) => 
+    a.toLowerCase().localeCompare(b.toLowerCase())
+  );
+  
   let yearColumn = null;
   
   // Identify year column
