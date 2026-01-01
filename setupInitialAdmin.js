@@ -62,9 +62,9 @@ async function setupInitialAdmin() {
   }
   
   console.log('✨ Setup completed!');
-  console.log('\n📋 Test Accounts:');
+  console.log('\n� Test Accounts:');
   console.log('-----------------');
-  console.log('👑 Admin: admin@filipinoapp.com / admin123');
+  console.log('� Admin: admin@filipinoapp.com / admin123');
   console.log('👤 User: user@filipinoapp.com / user123');
   console.log('\n⚠️ Important: Update SUPER_ADMIN_EMAIL in AuthService.js with your email!');
 }

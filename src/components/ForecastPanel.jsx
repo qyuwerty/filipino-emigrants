@@ -5,6 +5,8 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import { cleanData, sortData, normalizeData, denormalize, createSequences, calculateMetrics, DEFAULT_PREPARATION_OPTIONS } from '../utils/dataPreparation';
 import { buildLSTMModel, trainLSTMModel, predictLSTM, saveLSTMModel, loadLSTMModel, deleteLSTMModel, downloadLSTMModel } from '../models/lstmModel';
 import { buildMLPModel, trainMLPModel, predictMLP, saveMLPModel, loadMLPModel, deleteMLPModel, downloadMLPModel } from '../models/mlpModel';
+import ForecastChart from './ForecastChart';
+import ForecastModal from './ForecastModal';
 import './ForecastPanel.css';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Title);
@@ -129,6 +131,39 @@ const formatUnitsLabel = (units) => {
     return units.join(' → ');
   }
   return String(units);
+};
+
+const detectDistributionData = (data) => {
+  if (!data || !Array.isArray(data) || data.length === 0) return null;
+
+  const sample = data[0];
+  const columns = Object.keys(sample);
+
+  const yearCol = columns.find((c) => c.toLowerCase().includes('year')) || 'Year';
+
+  const numericCols = columns.filter((col) => {
+    if (col === yearCol) return false;
+    const val = sample[col];
+    return (
+      typeof val === 'number' ||
+      (typeof val === 'string' && !Number.isNaN(Number(val)) && val.trim() !== '')
+    );
+  });
+
+  if (numericCols.length >= 5 && numericCols.length <= 30) {
+    return {
+      type: 'DISTRIBUTION',
+      yearColumn: yearCol,
+      categoryColumns: numericCols,
+      totalColumn: null,
+      categories: numericCols.map((col) => ({
+        name: col,
+        sampleValue: sample[col]
+      }))
+    };
+  }
+
+  return null;
 };
 
 const getDefaultHyperparameters = (modelType, lookback) => {
@@ -283,12 +318,14 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
   const [lookback, setLookback] = useState(3);
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [selectedFeatures, setSelectedFeatures] = useState(null);
+  const [distributionData, setDistributionData] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedHyperparams, setSelectedHyperparams] = useState(() => getDefaultHyperparameters('LSTM', 3));
   const [tuningGrid, setTuningGrid] = useState(() => buildHyperparameterGrid('LSTM', 3));
   const [tuningRuns, setTuningRuns] = useState({});
   const [isTuning, setIsTuning] = useState(false);
   const [bestRunId, setBestRunId] = useState(null);
+  const [showChartModal, setShowChartModal] = useState(false);
 
   const updateTuningRuns = useCallback((run) => {
     if (!run?.id) {
@@ -459,6 +496,25 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
   }, [data]);
 
   useEffect(() => {
+    if (!Array.isArray(data) || data.length === 0) {
+      setDistributionData(null);
+      setSelectedCategory(null);
+      return;
+    }
+
+    const distInfo = detectDistributionData(data);
+    setDistributionData(distInfo);
+
+    if (distInfo && distInfo.categoryColumns.length > 0) {
+      const firstCategory = distInfo.categoryColumns[0];
+      setSelectedCategory((prev) => (prev && distInfo.categoryColumns.includes(prev) ? prev : firstCategory));
+      setSelectedTarget((prev) => (prev && distInfo.categoryColumns.includes(prev) ? prev : firstCategory));
+    } else {
+      setSelectedCategory(null);
+    }
+  }, [data, setSelectedTarget]);
+
+  useEffect(() => {
     if (!metadata) {
       return;
     }
@@ -476,15 +532,33 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
     }
   }, [metadata]);
 
+  const inferCategoryType = useCallback(() => {
+    if (!distributionData) {
+      return 'Categories';
+    }
+
+    const lowered = distributionData.categoryColumns.map((col) => col.toLowerCase());
+    if (lowered.some((c) => c.includes('age') || c.includes('-'))) return 'Age Groups';
+    if (lowered.some((c) => c.includes('education') || c.includes('graduate'))) return 'Education Levels';
+    if (lowered.some((c) => c.includes('single') || c.includes('married'))) return 'Civil Status';
+    return 'Categories';
+  }, [distributionData]);
+
   const preparationOptions = useMemo(() => {
-    const yearKey = resolvedColumns.yearKey ?? DEFAULT_PREPARATION_OPTIONS.yearKey;
-    const targetKey = selectedTarget ?? resolvedColumns.defaultTarget ?? DEFAULT_PREPARATION_OPTIONS.target;
-    
-    // Use selected features, or fall back to detected feature keys, or just the target
-    const featureList = selectedFeatures?.length > 0 
-      ? selectedFeatures 
-      : (resolvedColumns.featureKeys?.length > 0 ? resolvedColumns.featureKeys : [targetKey]);
-    
+    const isDistributionMode = Boolean(distributionData && selectedCategory);
+    const yearKey = isDistributionMode
+      ? 'year'
+      : resolvedColumns.yearKey ?? DEFAULT_PREPARATION_OPTIONS.yearKey;
+    const targetKey = isDistributionMode && selectedCategory
+      ? selectedCategory
+      : selectedTarget ?? resolvedColumns.defaultTarget ?? DEFAULT_PREPARATION_OPTIONS.target;
+
+    const featureList = isDistributionMode && selectedCategory
+      ? [selectedCategory]
+      : selectedFeatures?.length > 0
+        ? selectedFeatures
+        : (resolvedColumns.featureKeys?.length > 0 ? resolvedColumns.featureKeys : [targetKey]);
+
     // Build feature defaults for all features
     const featureDefaults = {};
     featureList.forEach((f) => { featureDefaults[f] = 0; });
@@ -499,16 +573,16 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
       dropInvalid: true,
       allowNegative: []
     };
-  }, [resolvedColumns, selectedTarget, selectedFeatures]);
+  }, [distributionData, resolvedColumns, selectedCategory, selectedFeatures, selectedTarget]);
 
   const FEATURES = preparationOptions.features ?? [];
   const TARGET = preparationOptions.target;
   const YEAR_KEY = preparationOptions.yearKey;
   const categoryColumn = null;
 
-  const createTrainingDataset = useCallback((lookbackValue) => {
+  const createTrainingDataset = useCallback((lookbackValue, workingDataset) => {
     const normalizedLookback = clampLookback(lookbackValue ?? lookback);
-    const workingData = data;
+    const workingData = workingDataset ?? data;
 
     const { rows: cleanedRows, issues, discardedCount } = cleanData(workingData, preparationOptions);
     setPrepIssues(issues);
@@ -543,7 +617,7 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
     };
   }, [FEATURES, TARGET, YEAR_KEY, data, lookback, preparationOptions]);
 
-  const conductTraining = useCallback(async (config, { onEpoch } = {}) => {
+  const conductTraining = useCallback(async (config, { onEpoch, datasetOverride } = {}) => {
     const baseConfig = config ?? getDefaultHyperparameters(modelType, lookback);
     const normalizedConfig = {
       ...baseConfig,
@@ -553,7 +627,7 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
       validationSplit: baseConfig.validationSplit ?? 0.2
     };
 
-    const dataset = createTrainingDataset(normalizedConfig.lookback);
+    const dataset = createTrainingDataset(normalizedConfig.lookback, datasetOverride);
     const {
       normalizedLookback,
       workingData,
@@ -853,7 +927,98 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
     setLookback(clamped);
   };
 
+  const DistributionSelector = () => {
+    if (!distributionData) return null;
+
+    const categoryType = inferCategoryType();
+    const sampleRow = data?.[0] ?? {};
+
+    return (
+      <div className="distribution-selector">
+        <h3>📊 {categoryType} Distribution Forecast</h3>
+        <p>Select one category to forecast:</p>
+
+        <div className="category-dropdown">
+          <label htmlFor="category-select" className="category-dropdown__label">
+            Choose category:
+          </label>
+          <select
+            id="category-select"
+            className="category-dropdown__select"
+            value={selectedCategory || ''}
+            onChange={(e) => {
+              const category = e.target.value;
+              setSelectedCategory(category);
+              setSelectedTarget(category);
+              setSelectedFeatures([]);
+            }}
+            disabled={isTraining}
+          >
+            <option value="" disabled>
+              Select a category...
+            </option>
+            {distributionData.categoryColumns.map((category) => {
+              const rawValue = sampleRow?.[category];
+              const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue);
+              const formattedSample = Number.isFinite(numericValue)
+                ? numericValue.toLocaleString()
+                : rawValue ?? '—';
+              const sampleYear = distributionData.yearColumn ? sampleRow?.[distributionData.yearColumn] : null;
+              
+              return (
+                <option key={category} value={category}>
+                  {humanize(category)} - {formattedSample} people {sampleYear ? `(Base year ${sampleYear})` : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div className="distribution-info">
+          <p><strong>How this works:</strong></p>
+          <ul>
+            <li>Select ONE category (e.g., "25 - 29") to forecast</li>
+            <li>System uses only THAT category's historical data</li>
+            <li>Other categories are IGNORED (they're not features!)</li>
+            <li>Forecasts future counts for just this category</li>
+          </ul>
+          <p className="warning">
+            ⚠️ <strong>Don't select multiple categories</strong> - each is forecasted separately
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  const DistributionModeInfo = () => {
+    if (!distributionData || !selectedCategory) return null;
+
+    const categoryType = inferCategoryType();
+    const sampleYear = data?.[0]?.[distributionData.yearColumn];
+    const sampleValue = data?.[0]?.[selectedCategory];
+
+    return (
+      <div className="distribution-mode-info">
+        <h3>🎯 Forecasting {categoryType}</h3>
+        <div className="distribution-details">
+          <p><strong>Selected:</strong> {selectedCategory}</p>
+          <p><strong>Sample:</strong> {sampleValue ?? '—'} in {sampleYear ?? '—'}</p>
+          <p><strong>Mode:</strong> Independent category forecasting</p>
+          <p className="hint">
+            The model will learn patterns from ONLY "{selectedCategory}" historical data.
+            Other categories are ignored in this forecast.
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   const handleTrain = async () => {
+    if (distributionData && !selectedCategory) {
+      alert('Please select a category to forecast first!');
+      return;
+    }
+
     setIsTraining(true);
     setTrainingProgress({ epoch: 0, loss: 0, mae: 0 });
     setMetrics(null);
@@ -870,6 +1035,30 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
         throw new Error('No feature columns detected for training. Please ensure the dataset contains relevant numeric fields.');
       }
 
+      let datasetOverride = null;
+
+      if (distributionData && selectedCategory) {
+        const simpleData = data
+          .map((row) => ({
+            year: row?.[distributionData.yearColumn],
+            [selectedCategory]: row?.[selectedCategory]
+          }))
+          .filter((row) =>
+            row.year !== undefined &&
+            row.year !== null &&
+            row.year !== '' &&
+            row[selectedCategory] !== undefined &&
+            row[selectedCategory] !== null &&
+            row[selectedCategory] !== ''
+          );
+
+        if (simpleData.length === 0) {
+          throw new Error(`No valid rows found for ${selectedCategory}.`);
+        }
+
+        datasetOverride = simpleData;
+      }
+
       const result = await conductTraining(selectedHyperparams, {
         onEpoch: ({ epoch, totalEpochs, logs }) => {
           setTrainingHistory((prev) => [...prev, logs]);
@@ -881,7 +1070,8 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
             val_mae: logs.val_mae?.toFixed(6) ?? undefined,
             totalEpochs
           });
-        }
+        },
+        datasetOverride
       });
 
       const calculatedMetrics = result.metrics;
@@ -923,7 +1113,24 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
       const runId = result.config.id ?? `adhoc-${Date.now()}`;
       updateTuningRuns({ id: runId, config: result.config, metrics: calculatedMetrics, trainedAt: new Date().toISOString(), metadata: newMetadata });
 
-      alert(`${result.config.modelType} model trained successfully!\nMAE: ${calculatedMetrics.mae}\nAccuracy: ${calculatedMetrics.accuracy}%`);
+      if (distributionData && selectedCategory) {
+        const totalYears = data.filter((row) => row?.[selectedCategory] !== null && row?.[selectedCategory] !== undefined).length;
+        const startYear = data?.[0]?.[distributionData.yearColumn];
+        const endYear = data?.[data.length - 1]?.[distributionData.yearColumn];
+        const lines = [
+          `✅ Successfully trained ${result.config.modelType} model`,
+          `📊 Forecasting: ${selectedCategory}`,
+          `📅 Data: ${totalYears} years (${startYear ?? '—'} - ${endYear ?? '—'})`,
+          `📈 MAE: ${calculatedMetrics.mae}`,
+          `🎯 Accuracy: ${calculatedMetrics.accuracy}%`,
+          '',
+          `The model learned patterns from ONLY "${selectedCategory}" historical data.`,
+          'To forecast other categories, select them and train again.'
+        ];
+        alert(lines.join('\n'));
+      } else {
+        alert(`${result.config.modelType} model trained successfully!\nMAE: ${calculatedMetrics.mae}\nAccuracy: ${calculatedMetrics.accuracy}%`);
+      }
     } catch (error) {
       console.error('Training error:', error);
       alert('Error training model: ' + error.message);
@@ -1023,7 +1230,7 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
           return normalizedRow;
         });
 
-        // Prepare input
+        // Prepare input - LSTM expects 3D tensor [batch, lookback, features]
         const input = [normalizedSequence.map((row) => activeFeatures.map((f) => row[f]))];
 
         // Predict
@@ -1145,85 +1352,91 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
         })}
       </section>
 
-      <section className="model-data-config">
-        <header className="section-block__header">
-          <h3>Data configuration</h3>
-          <p>Select which column to predict and which numeric fields to feed into the model.</p>
-        </header>
+      <DistributionSelector />
+      <DistributionModeInfo />
 
-        <div className="model-data-config__grid">
-          {categoryColumn && (resolvedColumns.categoryOptions ?? []).length > 0 && (
+      {!distributionData && (
+        /* Hide original config when distribution data */
+        <section className="model-data-config">
+          <header className="section-block__header">
+            <h3>Data configuration</h3>
+            <p>Select which column to predict and which numeric fields to feed into the model.</p>
+          </header>
+
+          <div className="model-data-config__grid">
+            {categoryColumn && (resolvedColumns.categoryOptions ?? []).length > 0 && (
+              <label>
+                <span>{humanize(categoryColumn)}</span>
+                <select
+                  value={selectedCategory ?? ''}
+                  onChange={(event) => setSelectedCategory(event.target.value || null)}
+                  disabled={isTraining}
+                >
+                  {(resolvedColumns.categoryOptions ?? []).map((option) => (
+                    <option key={option} value={option}>
+                      {humanize(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <label>
-              <span>{humanize(categoryColumn)}</span>
+              <span>Target column</span>
               <select
-                value={selectedCategory ?? ''}
-                onChange={(event) => setSelectedCategory(event.target.value || null)}
+                value={selectedTarget || ''}
+                onChange={(event) => setSelectedTarget(event.target.value || resolvedColumns.defaultTarget)}
                 disabled={isTraining}
               >
-                {(resolvedColumns.categoryOptions ?? []).map((option) => (
-                  <option key={option} value={option}>
-                    {humanize(option)}
+                {(resolvedColumns.numericCandidates ?? []).map((candidate) => (
+                  <option key={candidate} value={candidate}>
+                    {humanize(candidate)}
                   </option>
                 ))}
               </select>
             </label>
-          )}
 
-          <label>
-            <span>Target column</span>
-            <select
-              value={selectedTarget || ''}
-              onChange={(event) => setSelectedTarget(event.target.value || resolvedColumns.defaultTarget)}
-              disabled={isTraining}
-            >
-              {(resolvedColumns.numericCandidates ?? []).map((candidate) => (
-                <option key={candidate} value={candidate}>
-                  {humanize(candidate)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <fieldset disabled={isTraining}>
-            <legend>Feature columns</legend>
-            <div className="model-data-config__features">
-              {(resolvedColumns.numericCandidates ?? []).map((candidate) => {
-                const isTarget = candidate === (selectedTarget ?? resolvedColumns.defaultTarget);
-                const checked = !isTarget && (selectedFeatures ?? []).includes(candidate);
-                return (
-                  <label key={candidate} className={isTarget ? 'disabled' : ''}>
-                    <input
-                      type="checkbox"
-                      value={candidate}
-                      checked={checked}
-                      disabled={isTarget}
-                      onChange={(event) => {
-                        const { checked: isChecked, value } = event.target;
-                        setSelectedFeatures((prev) => {
-                          const base = prev ?? resolvedColumns.featureKeys ?? [];
-                          const next = new Set(base);
-                          if (isChecked) {
-                            next.add(value);
-                          } else {
-                            next.delete(value);
-                          }
-                          const cleaned = Array.from(next).filter((item) => item !== selectedTarget);
-                          if (cleaned.length === 0) {
-                            const fallback = (resolvedColumns.featureKeys ?? []).filter((item) => item !== selectedTarget);
-                            return fallback.length > 0 ? fallback : cleaned;
-                          }
-                          return cleaned;
-                        });
-                      }}
-                    />
-                    {humanize(candidate)}
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-        </div>
-      </section>
+            <fieldset disabled={isTraining}>
+              <legend>Feature columns</legend>
+              <div className="model-data-config__features">
+                {(resolvedColumns.numericCandidates ?? []).map((candidate) => {
+                  const isTarget = candidate === (selectedTarget ?? resolvedColumns.defaultTarget);
+                  const checked = !isTarget && (selectedFeatures ?? []).includes(candidate);
+                  return (
+                    <label key={candidate} className={isTarget ? 'disabled' : ''}>
+                      <input
+                        type="checkbox"
+                        value={candidate}
+                        checked={checked}
+                        disabled={isTarget}
+                        onChange={(event) => {
+                          const { checked: isChecked, value } = event.target;
+                          setSelectedFeatures((prev) => {
+                            const base = prev ?? resolvedColumns.featureKeys ?? [];
+                            const next = new Set(base);
+                            if (isChecked) {
+                              next.add(value);
+                            } else {
+                              next.delete(value);
+                            }
+                            const cleaned = Array.from(next).filter((item) => item !== selectedTarget);
+                            if (cleaned.length === 0) {
+                              const fallback = (resolvedColumns.featureKeys ?? []).filter((item) => item !== selectedTarget);
+                              return fallback.length > 0 ? fallback : cleaned;
+                            }
+                            return cleaned;
+                          });
+                        }}
+                      />
+                      {humanize(candidate)}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </div>
+        </section>
+      )}
 
       <section className="model-detail">
         <header className="model-detail__header">
@@ -1260,22 +1473,42 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
 
       <section className="model-actions">
         <div className="model-actions__primary">
-          <button onClick={handleTrain} disabled={isTraining} className="model-actions__train">
-            {isTraining ? 'Training…' : 'Train model'}
+          <button 
+            onClick={handleTrain} 
+            disabled={isTraining} 
+            className={`model-actions__train ${modelType === 'MLP' ? 'mlp-train' : 'lstm-train'}`}
+          >
+            {isTraining ? `Training ${modelType} Model...` : `Train ${modelType} Model`}
           </button>
-          <button onClick={handleForecast} disabled={!model || isTraining} className="model-actions__forecast">
+          <button 
+            onClick={handleForecast} 
+            disabled={!model || isTraining} 
+            className={`model-actions__forecast ${modelType === 'MLP' ? 'mlp' : ''}`}
+          >
             Generate forecast
           </button>
         </div>
         <div className="model-actions__secondary">
-          <button onClick={handleLoadModel} disabled={isTraining}>
-            Load saved model
+          <button 
+            onClick={handleLoadModel} 
+            disabled={isTraining}
+            className={`model-actions__load ${modelType === 'MLP' ? 'mlp' : ''}`}
+          >
+            Load Model
           </button>
-          <button onClick={handleDownloadModel} disabled={isTraining || !model}>
-            Download artifacts
+          <button 
+            onClick={handleDeleteModel} 
+            disabled={isTraining || !model} 
+            className={`model-actions__delete ${modelType === 'MLP' ? 'mlp' : ''}`}
+          >
+            Delete Model
           </button>
-          <button onClick={handleDeleteModel} disabled={isTraining || !model} className="danger">
-            Delete model
+          <button 
+            onClick={handleDownloadModel} 
+            disabled={isTraining || !model} 
+            className={`model-actions__download ${modelType === 'MLP' ? 'mlp' : ''}`}
+          >
+            Download Model
           </button>
         </div>
       </section>
@@ -1315,11 +1548,11 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
       )}
 
       {metricsSnapshot && !isTraining && (
-        <section className="metrics">
+        <section className={`metrics ${modelType === 'MLP' ? 'mlp' : ''}`}>
           <header className="metrics__header">
             <div>
-              <span className="metrics__eyebrow">Evaluation</span>
-              <h3 className="metrics__title">Performance snapshot</h3>
+              <span className="metrics__eyebrow">Model Performance</span>
+              <h3 className="metrics__title">{modelType} Model Performance Metrics</h3>
             </div>
             {lastTrainedAt && <span className="metrics__timestamp">Trained {lastTrainedAt}</span>}
           </header>
@@ -1344,6 +1577,52 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
               <span className="metric-label">Accuracy</span>
               <span className="metric-value">{metricsSnapshot.accuracy}%</span>
             </div>
+          </div>
+        </section>
+      )}
+
+      {fittedSeries && fittedSeries.length > 0 && !isTraining && (
+        <section className="testing-results">
+          <header className="testing-results__header">
+            <div>
+              <span className="testing-results__eyebrow">Model Validation</span>
+              <h3 className="testing-results__title">Testing Results - 20% Split (Actual vs Predicted)</h3>
+            </div>
+          </header>
+          <div className="table-scroll">
+            <table className="testing-results-table">
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th>Actual {activeCategoryLabel || formattedTarget}</th>
+                  <th>Predicted {activeCategoryLabel || formattedTarget}</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fittedSeries.slice(-6).map((result, index) => {
+                  const actual = typeof result.actual === 'number' ? result.actual : Number(result.actual);
+                  const predicted = typeof result.fitted === 'number' ? result.fitted : Number(result.fitted);
+                  const error = predicted - actual;
+                  const errorClass = error >= 0 ? 'error-positive' : 'error-negative';
+                  
+                  return (
+                    <tr key={result.year || index}>
+                      <td>{result.year}</td>
+                      <td>{Number.isFinite(actual) ? actual.toLocaleString() : '—'}</td>
+                      <td>{Number.isFinite(predicted) ? predicted.toLocaleString() : '—'}</td>
+                      <td className={errorClass}>
+                        {Number.isFinite(error) ? (
+                          <>
+                            {error >= 0 ? '+' : ''}{error.toLocaleString()}
+                          </>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </section>
       )}
@@ -1474,9 +1753,19 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
               <span className="forecast-results__eyebrow">Projection</span>
               <h3 className="forecast-results__title">{forecastYears}-year outlook</h3>
             </div>
-            <button type="button" className="forecast-results__download" onClick={handleDownloadModel} disabled={!model}>
-              Download model files
-            </button>
+            <div className="forecast-results__actions">
+              <button 
+                type="button" 
+                className={`forecast-results__chart ${modelType === 'MLP' ? 'mlp' : ''}`}
+                onClick={() => setShowChartModal(true)}
+                disabled={!forecasts || forecasts.length === 0}
+              >
+                View Chart
+              </button>
+              <button type="button" className="forecast-results__download" onClick={handleDownloadModel} disabled={!model}>
+                Download model files
+              </button>
+            </div>
           </header>
           <div className="table-scroll">
             <table>
@@ -1516,6 +1805,16 @@ export default function ForecastPanel({ data, onForecastUpdate }) {
           <li>Validation split: 20%</li>
         </ul>
       </footer>
+
+      <ForecastModal open={showChartModal} onClose={() => setShowChartModal(false)}>
+        <ForecastChart
+          historicalData={historicalSeries}
+          forecastData={forecasts}
+          modelType={modelType}
+          targetColumn={selectedCategory || TARGET}
+          yearsToForecast={forecastYears}
+        />
+      </ForecastModal>
     </div>
   );
 }

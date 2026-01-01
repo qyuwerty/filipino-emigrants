@@ -127,6 +127,7 @@ const CsvUploader = ({ onCsvData, onClearData, userRole, isAuthenticated }) => {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: false,
+      transformHeader: (header) => header, // Preserve original header formatting exactly
       complete: (results) => {
         if (results.errors && results.errors.length > 0) {
           console.error("CSV parsing errors:", results.errors);

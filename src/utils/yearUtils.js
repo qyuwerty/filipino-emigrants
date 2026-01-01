@@ -4,6 +4,86 @@
  */
 
 /**
+ * Historical Filipino Emigrants Data (2015-2020)
+ * Source: LSTM Model Testing Results - Actual vs Predicted Values
+ * This data represents the actual number of Filipino emigrants by year
+ */
+export const HISTORICAL_EMIGRANTS_DATA = [
+  { year: 2015, emigrants: 4248, predicted: 3130.613, error: -1117.387 },
+  { year: 2016, emigrants: 4204, predicted: 3164.623, error: -1039.377 },
+  { year: 2017, emigrants: 3597, predicted: 3312.864, error: -284.136 },
+  { year: 2018, emigrants: 3346, predicted: 3371.521, error: 25.521 },
+  { year: 2019, emigrants: 2949, predicted: 3236.394, error: 287.394 },
+  { year: 2020, emigrants: 602, predicted: 3038.953, error: 2436.953 }
+];
+
+/**
+ * Gets historical emigrants data for chart visualization
+ * @param {boolean} includePredicted - Whether to include predicted values
+ * @param {boolean} includeError - Whether to include error values
+ * @returns {Array} - Formatted historical data for charts
+ */
+export const getHistoricalEmigrantsData = (includePredicted = true, includeError = false) => {
+  return HISTORICAL_EMIGRANTS_DATA.map(item => {
+    const chartData = {
+      year: item.year,
+      emigrants: item.emigrants
+    };
+    
+    if (includePredicted) {
+      chartData.predicted = Math.round(item.predicted);
+    }
+    
+    if (includeError) {
+      chartData.error = item.error;
+      chartData.absError = Math.abs(item.error);
+    }
+    
+    return chartData;
+  });
+};
+
+/**
+ * Gets historical data for a specific year range
+ * @param {number} startYear - Starting year
+ * @param {number} endYear - Ending year
+ * @returns {Array} - Filtered historical data
+ */
+export const getHistoricalDataByRange = (startYear, endYear) => {
+  return HISTORICAL_EMIGRANTS_DATA.filter(
+    item => item.year >= startYear && item.year <= endYear
+  );
+};
+
+/**
+ * Calculates summary statistics for historical data
+ * @returns {Object} - Summary statistics
+ */
+export const getHistoricalDataStats = () => {
+  const data = HISTORICAL_EMIGRANTS_DATA;
+  const totalEmigrants = data.reduce((sum, item) => sum + item.emigrants, 0);
+  const avgEmigrants = totalEmigrants / data.length;
+  const maxEmigrants = Math.max(...data.map(item => item.emigrants));
+  const minEmigrants = Math.min(...data.map(item => item.emigrants));
+  
+  // Error statistics
+  const errors = data.map(item => item.error);
+  const avgError = errors.reduce((sum, error) => sum + Math.abs(error), 0) / errors.length;
+  const maxError = Math.max(...errors.map(error => Math.abs(error)));
+  
+  return {
+    totalEmigrants,
+    avgEmigrants: Math.round(avgEmigrants),
+    maxEmigrants,
+    minEmigrants,
+    avgError: Math.round(avgError),
+    maxError: Math.round(maxError),
+    years: data.length,
+    yearRange: `${Math.min(...data.map(item => item.year))}-${Math.max(...data.map(item => item.year))}`
+  };
+};
+
+/**
  * Finds the Year column name from dataset
  * @param {Array} data - Dataset array
  * @returns {string|null} - Year column name or null

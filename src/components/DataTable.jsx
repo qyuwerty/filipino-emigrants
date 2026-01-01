@@ -141,36 +141,13 @@ const TableInput = ({
 
 // Utility Functions
 
-// Format header names for display - handles dashes, underscores, slashes, commas, & signs, and spaces
+// Format header names for display - preserves original CSV formatting exactly
 const formatHeaderName = (name) => {
   if (!name || typeof name !== 'string') return name;
   
-  // Replace underscores with spaces first
-  let formatted = name.replace(/_/g, ' ');
-  
-  // Capitalize first letter of each word, preserving symbols (dash, comma, slash, &)
-  // Split by spaces but keep the symbols intact
-  formatted = formatted
-    .split(' ')
-    .map(word => {
-      // Handle words with symbols inside them (e.g., "live-in", "male/female")
-      // Capitalize first letter of each part separated by dash, slash, or after &
-      return word
-        .split(/(-|\/|,|&)/)
-        .map((part, idx) => {
-          // Keep separators as-is
-          if (['-', '/', ',', '&'].includes(part)) return part;
-          // Capitalize first letter of each part
-          if (part.length > 0) {
-            return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
-          }
-          return part;
-        })
-        .join('');
-    })
-    .join(' ');
-  
-  return formatted;
+  // Return the name exactly as it appears in the CSV
+  // No modifications - preserve original spacing, capitalization, and symbols
+  return name;
 };
 
 const formatCell = (value) => {
@@ -823,7 +800,7 @@ const handleCellChange = (rowIndex, field, value, isNewRow = false) => {
               <tr>
                 {allColumns.map((col) => (
                   <th key={col} className="text-base font-bold">
-                    {formatHeaderName(col)}
+                    {col}
                     {col === yearColumn && (
                       <span className="ml-2 text-xs font-normal text-blue-400">(Year Column - Read Only)</span>
                     )}
@@ -903,103 +880,93 @@ const handleCellChange = (rowIndex, field, value, isNewRow = false) => {
                     );
                   })}
                   
-          <td>
-            <div className="table-actions">
-              {editRowIndex === startIndex + rowIndex ? (
-                <button 
-                  className="btn btn-success" 
-                  onClick={() => handleSaveEdit(rowIndex)}
-                  disabled={savingRowId === row.id}
-                >
-                  {savingRowId === row.id ? "Saving..." : "💾 Save"}
-                </button>
-              ) : (
-                <button 
-                  className="btn btn-primary" 
-                  onClick={() => handleEdit(rowIndex)}
-                  disabled={editRowIndex !== null} // Only disable if another row is editing
-                >
-                  ✏️ Edit
-                </button>
-              )}
-                    <button 
-                      className="btn btn-danger" 
-                      onClick={() => handleDelete(rowIndex)}
-                      disabled={deletingRowId === row.id || editRowIndex === startIndex + rowIndex}
-                    >
-                      {deletingRowId === row.id ? "Deleting..." : "🗑️ Delete"}
-                    </button>
-                  </div>
-                </td>
+                  <td>
+                    <div className="table-actions">
+                      {editRowIndex === startIndex + rowIndex ? (
+                        <button 
+                          className="btn btn-success" 
+                          onClick={() => handleSaveEdit(rowIndex)}
+                          disabled={savingRowId === row.id}
+                        >
+                          {savingRowId === row.id ? "Saving..." : "💾 Save"}
+                        </button>
+                      ) : (
+                        <button 
+                          className="btn btn-primary" 
+                          onClick={() => handleEdit(rowIndex)}
+                          disabled={editRowIndex !== null}
+                        >
+                          ✏️ Edit
+                        </button>
+                      )}
+                      <button 
+                        className="btn btn-danger" 
+                        onClick={() => handleDelete(rowIndex)}
+                        disabled={deletingRowId === row.id || editRowIndex === startIndex + rowIndex}
+                      >
+                        {deletingRowId === row.id ? "Deleting..." : "🗑️ Delete"}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               
               {/* Add New Row */}
-{safeUserRole === 'admin' && (
-  <tr className="data-table__new-row">
-    {allColumns.map((col) => {
-      const fieldType = getFieldType(col);
-      const isYear = col === yearColumn;
-      const isNumeric = fieldType === "number";
-      const hasError = errors[col];
-      
-      return (
-        <td key={col} className={isYear ? 'year-column' : ''}>
-          <div>
-            <TableInput
-              type={isYear || isNumeric ? "number" : "text"}
-              value={newRow[col] || ""}
-              onChange={(e) => handleCellChange(null, col, e.target.value, true)}
-              onClick={() => handleFieldClick(-1, col)}
-              hasError={hasError}
-              isYear={isYear}
-              isNewRow={true}
-              placeholder={
-                isYear ? "📅 Year (e.g., 2000)" : 
-                isNumeric ? `${col} (number)` : 
-                `Enter ${col}`
-              }
-              disabled={isAddingNew}
-              autoFocus={editingField?.rowIndex === -1 && editingField?.field === col}
-            />
-            {hasError && (
-              <div className="data-table__validation-error mt-2">
-                <AlertCircle size={14} />
-                <span className="font-medium">{errors[col]}</span>
-              </div>
-            )}
-          </div>
-        </td>
-      );
-    })}
-    
-    {/* Add button with debugging */}
-    <td>
-      <button 
-        className="btn btn-success w-full btn-large" 
-        onClick={(e) => {
-          console.log("=== BUTTON CLICKED ===");
-          console.log("Event:", e);
-          console.log("isAddingNew:", isAddingNew);
-          console.log("safeUserRole:", safeUserRole);
-          handleAdd();
-        }}
-        disabled={isAddingNew}
-        style={{
-          cursor: isAddingNew ? 'not-allowed' : 'pointer',
-          pointerEvents: 'auto',
-          zIndex: 10,
-          position: 'relative'
-        }}
-      >
-        {isAddingNew ? "⏳ Adding..." : "➕ Add New Record"}
-      </button>
-      
-      
-    </td>
-  </tr>
-)}
-              
+              {safeUserRole === 'admin' && (
+                <tr className="data-table__new-row">
+                  {allColumns.map((col) => {
+                    const fieldType = getFieldType(col);
+                    const isYear = col === yearColumn;
+                    const isNumeric = fieldType === "number";
+                    const hasError = errors[col];
+                    
+                    return (
+                      <td key={col} className={isYear ? 'year-column' : ''}>
+                        <div>
+                          <TableInput
+                            type={isYear || isNumeric ? "number" : "text"}
+                            value={newRow[col] || ""}
+                            onChange={(e) => handleCellChange(null, col, e.target.value, true)}
+                            onClick={() => handleFieldClick(-1, col)}
+                            hasError={hasError}
+                            isYear={isYear}
+                            isNewRow={true}
+                            placeholder={
+                              isYear ? "📅 Year (e.g., 2000)" : 
+                              isNumeric ? `${col} (number)` : 
+                              `Enter ${col}`
+                            }
+                            disabled={isAddingNew}
+                            autoFocus={editingField?.rowIndex === -1 && editingField?.field === col}
+                          />
+                          {hasError && (
+                            <div className="data-table__validation-error mt-2">
+                              <AlertCircle size={14} />
+                              <span className="font-medium">{errors[col]}</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  
+                  <td>
+                    <button 
+                      className="btn btn-success w-full btn-large" 
+                      onClick={handleAdd}
+                      disabled={isAddingNew}
+                      style={{
+                        cursor: isAddingNew ? 'not-allowed' : 'pointer',
+                        pointerEvents: 'auto',
+                        zIndex: 10,
+                        position: 'relative'
+                      }}
+                    >
+                      {isAddingNew ? "⏳ Adding..." : "➕ Add New Record"}
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>  
           </table>
         </div>

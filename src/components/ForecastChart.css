@@ -1,0 +1,74 @@
+.forecast-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.forecast-chart__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.forecast-chart__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0b1623;
+}
+
+.forecast-chart__subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(15, 23, 42, 0.7);
+}
+
+.forecast-chart__container {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 1.5rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 12px -8px rgba(15, 23, 42, 0.3);
+}
+
+.forecast-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  background: rgba(248, 250, 252, 0.95);
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  text-align: center;
+}
+
+.forecast-chart-empty p {
+  margin: 0;
+  color: rgba(15, 23, 42, 0.6);
+  font-size: 0.95rem;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .forecast-chart__container {
+    padding: 1rem;
+  }
+  
+  .forecast-chart__title {
+    font-size: 1.1rem;
+  }
+  
+  .forecast-chart__subtitle {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .forecast-chart__container {
+    padding: 0.75rem;
+  }
+  
+  .forecast-chart {
+    gap: 1rem;
+  }
+}
