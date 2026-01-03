@@ -8,10 +8,12 @@ import StatusCombinedChart from "./components/StatusCombinedChart";
 import { useAgeData } from './hooks/useAgeData';
 import { useCountriesData } from './hooks/useCountriesData';
 import { useMajorCountriesData } from './hooks/useMajorCountriesData';
+import { useOccupationData } from './hooks/useOccupationData';
 import { useDatasetData } from './hooks/useDatasetData';
 import AgeDataTable from "./components/AgeDataTable";
 import AllCountriesTable from "./components/AllCountriesTable";
 import MajorCountriesTable from "./components/MajorCountriesTable";
+import OccupationTable from "./components/OccupationTable";
 import DataTable from "./components/DataTable";
 import ForecastPanel from "./components/ForecastPanel"; 
 import TabNavigation from "./components/TabNavigation";
@@ -78,9 +80,10 @@ const App = () => {
   const ageData = useAgeData();
   const countriesData = useCountriesData();
   const majorCountriesData = useMajorCountriesData();
+  const occupationData = useOccupationData();
   const allCountriesData = useDatasetData('all-countries');
   const majorCountriesDataOld = useDatasetData('major-countries');
-  const occupationData = useDatasetData('occupation');
+  const occupationDataOld = useDatasetData('occupation');
   const sexData = useDatasetData('sex');
   const civilStatusData = useDatasetData('civil-status');
   const educationData = useDatasetData('education');
@@ -637,15 +640,7 @@ const App = () => {
                         </div>
                         <span className="role-chip">Emigrant-1981-2020-Occu.csv</span>
                       </div>
-                      <DataTable
-                        data={occupationData.data}
-                        setData={occupationData.setData}
-                        schema={schema}
-                        types={types}
-                        userRole={userRole}
-                        loading={occupationData.loading}
-                        error={occupationData.error}
-                      />
+                      <OccupationTable />
                     </div>
                   )}
 

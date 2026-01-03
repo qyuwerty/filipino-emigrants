@@ -880,6 +880,239 @@ export const deleteMajorCountriesGroup = async (country) => {
   }
 };
 
+// ========== OCCUPATION COLLECTION SPECIFIC FUNCTIONS ==========
+
+// Fetch occupation data from emigrant_occupation collection
+export const fetchOccupationData = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "emigrant_occupation"));
+    const occupationData = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      const occupation = doc.id;
+      
+      const yearlyDataField = data.yearlyData || data["yearlyData"];
+      if (yearlyDataField) {
+        console.log(`Fetching occupation ${occupation}:`, yearlyDataField);
+        console.log("Field names in document:", Object.keys(data));
+        
+        if (typeof yearlyDataField === 'object' && !Array.isArray(yearlyDataField)) {
+          // Object format: {"1981": 2338, "1982": 1894, ...}
+          Object.entries(yearlyDataField).forEach(([year, count]) => {
+            occupationData.push({
+              id: `${occupation}_${year}`,
+              occupation: occupation,
+              year: parseInt(year),
+              count: count,
+              documentId: doc.id
+            });
+          });
+        } else if (Array.isArray(yearlyDataField)) {
+          // Array format: [{"year": 1981, "count": 2338}, {"year": 1982, "count": 1894}]
+          yearlyDataField.forEach((yearEntry) => {
+            const year = yearEntry.year;
+            const count = yearEntry.count;
+            
+            occupationData.push({
+              id: `${occupation}_${year}`,
+              occupation: occupation,
+              year: parseInt(year),
+              count: count,
+              documentId: doc.id
+            });
+          });
+        }
+      }
+    });
+    
+    return occupationData.sort((a, b) => a.year - b.year);
+  } catch (error) {
+    console.error("Error fetching occupation data:", error);
+    throw error;
+  }
+};
+
+// Add occupation data record
+export const addOccupationData = async (occupation, year, count) => {
+  try {
+    const docRef = doc(db, "emigrant_occupation", occupation);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const existingData = docSnap.data();
+      const yearlyDataField = existingData.yearlyData || existingData["yearlyData"] || {};
+      
+      console.log("Adding to existing occupation:", occupation);
+      console.log("Existing yearlyData:", yearlyDataField);
+      
+      // Create proper copy and update
+      let updatedYearlyData;
+      
+      if (typeof yearlyDataField === 'object' && !Array.isArray(yearlyDataField)) {
+        // Object format: {"1981": 2338, "1982": 1894, ...}
+        updatedYearlyData = { ...yearlyDataField };
+        updatedYearlyData[year.toString()] = count;
+        console.log("Updated existing year in object");
+      } else if (Array.isArray(yearlyDataField)) {
+        // Convert array to object format
+        updatedYearlyData = {};
+        yearlyDataField.forEach(item => {
+          updatedYearlyData[item.year.toString()] = item.count;
+        });
+        updatedYearlyData[year.toString()] = count;
+        console.log("Converted array to object and added new year");
+      } else {
+        // Create new object
+        updatedYearlyData = { [year.toString()]: count };
+        console.log("Created new object");
+      }
+      
+      console.log("Updated yearlyData:", updatedYearlyData);
+      
+      await updateDoc(docRef, { yearlyData: updatedYearlyData });
+      console.log("Successfully updated existing occupation");
+      
+    } else {
+      // Create new document with object format
+      console.log("Creating new occupation:", occupation);
+      const newYearlyData = { [year.toString()]: count };
+      console.log("New yearlyData:", newYearlyData);
+      
+      await setDoc(docRef, { yearlyData: newYearlyData });
+      console.log("Successfully created new occupation with object format");
+    }
+    
+    return { occupation, year, count };
+  } catch (error) {
+    console.error("Error adding occupation data:", error);
+    throw error;
+  }
+};
+
+// Update occupation data record
+export const updateOccupationData = async (occupation, year, count) => {
+  try {
+    const docRef = doc(db, "emigrant_occupation", occupation);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Occupation ${occupation} not found`);
+    }
+    
+    const existingData = docSnap.data();
+    let yearlyDataField = existingData.yearlyData || existingData["yearlyData"] || {};
+    
+    // Debug logging
+    console.log("Before update - yearlyDataField:", yearlyDataField);
+    console.log("Updating year:", year, "with count:", count);
+    console.log("Field names in document:", Object.keys(existingData));
+    
+    // Handle object format
+    if (typeof yearlyDataField === 'object' && !Array.isArray(yearlyDataField)) {
+      // Object format: {"1981": 2338, "1982": 1894, ...}
+      yearlyDataField[year.toString()] = count;
+      console.log("Updated object format");
+    } else if (Array.isArray(yearlyDataField)) {
+      // Convert array to object format
+      const newYearlyDataField = {};
+      yearlyDataField.forEach(item => {
+        newYearlyDataField[item.year.toString()] = item.count;
+      });
+      newYearlyDataField[year.toString()] = count;
+      yearlyDataField = newYearlyDataField;
+      console.log("Converted array to object and updated");
+    } else {
+      // Create new object if invalid format
+      yearlyDataField = { [year.toString()]: count };
+      console.log("Created new object");
+    }
+    
+    console.log("After update - yearlyDataField:", yearlyDataField);
+    
+    await updateDoc(docRef, { yearlyData: yearlyDataField });
+    console.log("Successfully updated Firestore");
+    
+    return { occupation, year, count };
+  } catch (error) {
+    console.error("Error updating occupation data:", error);
+    throw error;
+  }
+};
+
+// Delete occupation data record (specific year or entire occupation)
+export const deleteOccupationData = async (occupation, year, deleteAll = false) => {
+  try {
+    if (deleteAll) {
+      // Delete entire occupation document
+      console.log(`Deleting entire occupation: ${occupation}`);
+      const docRef = doc(db, "emigrant_occupation", occupation);
+      await deleteDoc(docRef);
+      console.log("Successfully deleted entire occupation document");
+      return { occupation, deleted: true };
+    } else {
+      // Delete specific year data
+      const docRef = doc(db, "emigrant_occupation", occupation);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        throw new Error(`Occupation ${occupation} not found`);
+      }
+      
+      const existingData = docSnap.data();
+      console.log("Before delete - existingData:", existingData);
+      
+      const yearlyDataField = existingData.yearlyData || existingData["yearlyData"] || {};
+      console.log(`Deleting year ${year} from occupation ${occupation}`);
+      console.log("Before delete - yearlyDataField:", yearlyDataField);
+      
+      // Create a proper copy to avoid reference issues
+      let updatedYearlyData;
+      
+      if (typeof yearlyDataField === 'object' && !Array.isArray(yearlyDataField)) {
+        // Object format: {"1981": 2338, "1982": 1894, ...}
+        updatedYearlyData = { ...yearlyDataField };
+        delete updatedYearlyData[year.toString()];
+        console.log("Deleted from object format, remaining keys:", Object.keys(updatedYearlyData));
+      } else {
+        console.log("Invalid yearlyData format, cannot delete");
+        return { occupation, year, deleted: false };
+      }
+      
+      console.log("After delete - updatedYearlyData:", updatedYearlyData);
+      
+      await updateDoc(docRef, { yearlyData: updatedYearlyData });
+      console.log("Successfully deleted year from Firestore");
+      
+      return { occupation, year, deleted: true };
+    }
+  } catch (error) {
+    console.error("Error deleting occupation data:", error);
+    throw error;
+  }
+};
+
+// Delete entire occupation document
+export const deleteOccupationGroup = async (occupation) => {
+  try {
+    const docRef = doc(db, "emigrant_occupation", occupation);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Occupation ${occupation} not found`);
+    }
+    
+    console.log(`Deleting entire occupation: ${occupation}`);
+    await deleteDoc(docRef);
+    console.log("Successfully deleted entire occupation document");
+    
+    return { occupation, deleted: true };
+  } catch (error) {
+    console.error("Error deleting occupation:", error);
+    throw error;
+  }
+};
+
 // ========== ORIGINAL COLLECTION FUNCTIONS ==========
 
 export const fetchRecordsByDataset = async (datasetType) => {
