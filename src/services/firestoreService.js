@@ -1113,8 +1113,523 @@ export const deleteOccupationGroup = async (occupation) => {
   }
 };
 
-// ========== ORIGINAL COLLECTION FUNCTIONS ==========
+// ========== SEX COLLECTION SPECIFIC FUNCTIONS ==========
 
+// Fetch sex data from emigrant_sex collection
+export const fetchSexData = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "emigrant_sex"));
+    const sexData = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      sexData.push({
+        id: doc.id,
+        year: data.year,
+        female: data.female || 0,
+        male: data.male || 0,
+        sex_ratio: data.sex_ratio || 0,
+        total: data.total || 0
+      });
+    });
+    
+    return sexData.sort((a, b) => a.year - b.year);
+  } catch (error) {
+    console.error("Error fetching sex data:", error);
+    throw error;
+  }
+};
+
+// Add sex data for a specific year
+export const addSexData = async (year, female, male) => {
+  try {
+    const total = female + male;
+    const sex_ratio = male > 0 ? ((male / female) * 100).toFixed(2) : 0;
+    
+    const sexData = {
+      year: parseInt(year),
+      female: parseInt(female),
+      male: parseInt(male),
+      total: total,
+      sex_ratio: parseFloat(sex_ratio)
+    };
+    
+    const docRef = doc(db, "emigrant_sex", year.toString());
+    await setDoc(docRef, sexData);
+    
+    console.log(`Successfully added sex data for year ${year}`);
+    return { year, ...sexData };
+  } catch (error) {
+    console.error("Error adding sex data:", error);
+    throw error;
+  }
+};
+
+// Update sex data for a specific year
+export const updateSexData = async (year, female, male) => {
+  try {
+    const total = female + male;
+    const sex_ratio = male > 0 ? ((male / female) * 100).toFixed(2) : 0;
+    
+    const updatedData = {
+      year: parseInt(year),
+      female: parseInt(female),
+      male: parseInt(male),
+      total: total,
+      sex_ratio: parseFloat(sex_ratio)
+    };
+    
+    const docRef = doc(db, "emigrant_sex", year.toString());
+    await setDoc(docRef, updatedData);
+    
+    console.log(`Successfully updated sex data for year ${year}`);
+    return { year, ...updatedData };
+  } catch (error) {
+    console.error("Error updating sex data:", error);
+    throw error;
+  }
+};
+
+// Delete sex data for a specific year
+export const deleteSexData = async (year) => {
+  try {
+    const docRef = doc(db, "emigrant_sex", year.toString());
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Sex data for year ${year} not found`);
+    }
+    
+    await deleteDoc(docRef);
+    console.log(`Successfully deleted sex data for year ${year}`);
+    
+    return { year, deleted: true };
+  } catch (error) {
+    console.error("Error deleting sex data:", error);
+    throw error;
+  }
+};
+
+// ========== CIVIL STATUS COLLECTION SPECIFIC FUNCTIONS ==========
+
+// Fetch civil status data from emigrant_civilStatus collection
+export const fetchCivilStatusData = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "emigrant_civilStatus"));
+    const civilStatusData = [];
+    
+    console.log('fetchCivilStatusData - Query snapshot size:', querySnapshot.size);
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      console.log('fetchCivilStatusData - Document data:', doc.id, data);
+      civilStatusData.push({
+        id: doc.id,
+        year: data.year,
+        divorced: data.divorced || 0,
+        married: data.married || 0,
+        separated: data.separated || 0,
+        single: data.single || 0,
+        widower: data.widower || 0,
+        notReported: data.notReported || 0,
+        total: data.total || 0
+      });
+    });
+    
+    console.log('fetchCivilStatusData - Final data array:', civilStatusData);
+    return civilStatusData.sort((a, b) => a.year - b.year);
+  } catch (error) {
+    console.error("Error fetching civil status data:", error);
+    throw error;
+  }
+};
+
+// Add civil status data for a specific year
+export const addCivilStatusData = async (year, divorced, married, separated, single, widower, notReported) => {
+  try {
+    const total = divorced + married + separated + single + widower + notReported;
+    
+    const civilStatusData = {
+      year: parseInt(year),
+      divorced: parseInt(divorced),
+      married: parseInt(married),
+      separated: parseInt(separated),
+      single: parseInt(single),
+      widower: parseInt(widower),
+      notReported: parseInt(notReported),
+      total: total
+    };
+    
+    const docRef = doc(db, "emigrant_civilStatus", year.toString());
+    await setDoc(docRef, civilStatusData);
+    
+    console.log(`Successfully added civil status data for year ${year}`);
+    return { year, ...civilStatusData };
+  } catch (error) {
+    console.error("Error adding civil status data:", error);
+    throw error;
+  }
+};
+
+// Update civil status data for a specific year
+export const updateCivilStatusData = async (year, divorced, married, separated, single, widower, notReported) => {
+  try {
+    const total = divorced + married + separated + single + widower + notReported;
+    
+    const updatedData = {
+      year: parseInt(year),
+      divorced: parseInt(divorced),
+      married: parseInt(married),
+      separated: parseInt(separated),
+      single: parseInt(single),
+      widower: parseInt(widower),
+      notReported: parseInt(notReported),
+      total: total
+    };
+    
+    const docRef = doc(db, "emigrant_civilStatus", year.toString());
+    await setDoc(docRef, updatedData);
+    
+    console.log(`Successfully updated civil status data for year ${year}`);
+    return { year, ...updatedData };
+  } catch (error) {
+    console.error("Error updating civil status data:", error);
+    throw error;
+  }
+};
+
+// Delete civil status data for a specific year
+export const deleteCivilStatusData = async (year) => {
+  try {
+    const docRef = doc(db, "emigrant_civilStatus", year.toString());
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Civil status data for year ${year} not found`);
+    }
+    
+    await deleteDoc(docRef);
+    console.log(`Successfully deleted civil status data for year ${year}`);
+    return { year, deleted: true };
+  } catch (error) {
+    console.error("Error deleting civil status data:", error);
+    throw error;
+  }
+};
+
+// ========== EDUCATION COLLECTION SPECIFIC FUNCTIONS ==========
+
+// Fetch education data from emigrant_education collection
+export const fetchEducationData = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "emigrant_education"));
+    const educationData = [];
+    
+    console.log('fetchEducationData - Query snapshot size:', querySnapshot.size);
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      console.log('fetchEducationData - Document data:', doc.id, data);
+      
+      // Handle the data field which contains year-to-count mappings
+      const yearlyData = data.data || {};
+      
+      // Convert the yearly data object to individual records
+      Object.keys(yearlyData).forEach(year => {
+        educationData.push({
+          id: `${doc.id}_${year}`,
+          educationGroup: doc.id,
+          year: parseInt(year),
+          count: yearlyData[year] || 0
+        });
+      });
+    });
+    
+    console.log('fetchEducationData - Final data array:', educationData);
+    return educationData.sort((a, b) => a.year - b.year);
+  } catch (error) {
+    console.error("Error fetching education data:", error);
+    throw error;
+  }
+};
+
+// Add education data for a specific education group and year
+export const addEducationData = async (educationGroup, year, count) => {
+  try {
+    const docRef = doc(db, "emigrant_education", educationGroup);
+    const docSnap = await getDoc(docRef);
+    
+    let educationData = {};
+    
+    if (docSnap.exists()) {
+      const existingData = docSnap.data();
+      educationData = existingData.data || {};
+    }
+    
+    // Update the year-to-count mapping
+    educationData[year.toString()] = parseInt(count);
+    
+    await setDoc(docRef, { data: educationData });
+    
+    console.log(`Successfully added education data for group ${educationGroup}, year ${year}`);
+    return { educationGroup, year, count };
+  } catch (error) {
+    console.error("Error adding education data:", error);
+    throw error;
+  }
+};
+
+// Update education data for a specific education group and year
+export const updateEducationData = async (educationGroup, year, count) => {
+  try {
+    const docRef = doc(db, "emigrant_education", educationGroup);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Education group ${educationGroup} not found`);
+    }
+    
+    const existingData = docSnap.data();
+    let educationData = existingData.data || {};
+    
+    // Update the year-to-count mapping
+    educationData[year.toString()] = parseInt(count);
+    
+    await updateDoc(docRef, { data: educationData });
+    
+    console.log(`Successfully updated education data for group ${educationGroup}, year ${year}`);
+    return { educationGroup, year, count };
+  } catch (error) {
+    console.error("Error updating education data:", error);
+    throw error;
+  }
+};
+
+// Delete education data for a specific education group and year
+export const deleteEducationData = async (educationGroup, year) => {
+  try {
+    const docRef = doc(db, "emigrant_education", educationGroup);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Education group ${educationGroup} not found`);
+    }
+    
+    const existingData = docSnap.data();
+    let educationData = existingData.data || {};
+    
+    // Remove the specific year
+    delete educationData[year.toString()];
+    
+    await updateDoc(docRef, { data: educationData });
+    
+    console.log(`Successfully deleted education data for group ${educationGroup}, year ${year}`);
+    return { educationGroup, year, deleted: true };
+  } catch (error) {
+    console.error("Error deleting education data:", error);
+    throw error;
+  }
+};
+
+// Delete entire education group document
+export const deleteEducationGroup = async (educationGroup) => {
+  try {
+    const docRef = doc(db, "emigrant_education", educationGroup);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Education group ${educationGroup} not found`);
+    }
+    
+    console.log(`Deleting entire education group: ${educationGroup}`);
+    await deleteDoc(docRef);
+    console.log("Successfully deleted entire education group document");
+    
+    return { educationGroup, deleted: true };
+  } catch (error) {
+    console.error("Error deleting education group:", error);
+    throw error;
+  }
+};
+
+// ========== PLACE OF ORIGIN COLLECTION SPECIFIC FUNCTIONS ==========
+
+// Fetch place of origin data from emigrant_placeOfOrigin collection
+export const fetchPlaceOfOriginData = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "emigrant_placeOfOrigin"));
+    const placeOfOriginData = [];
+    
+    console.log('fetchPlaceOfOriginData - Query snapshot size:', querySnapshot.size);
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      console.log('fetchPlaceOfOriginData - Document data:', doc.id, data);
+      
+      // Handle the years field which contains an array of objects with value and year properties
+      const yearsArray = data.years || [];
+      console.log('fetchPlaceOfOriginData - Years array for', doc.id, ':', yearsArray);
+      console.log('fetchPlaceOfOriginData - Years array type:', typeof yearsArray, 'Length:', yearsArray.length);
+      
+      // Parse the array of objects with value and year properties
+      if (Array.isArray(yearsArray)) {
+        console.log('fetchPlaceOfOriginData - Using value/year object parsing approach');
+        yearsArray.forEach((yearData, index) => {
+          console.log('fetchPlaceOfOriginData - Processing yearData', index, ':', yearData, 'Type:', typeof yearData);
+          if (yearData && typeof yearData === 'object' && yearData.hasOwnProperty('year') && yearData.hasOwnProperty('value')) {
+            const yearNum = parseInt(yearData.year);
+            const count = parseInt(yearData.value);
+            console.log('fetchPlaceOfOriginData - Adding record:', {
+              id: `${doc.id}_${yearNum}`,
+              region: doc.id,
+              year: yearNum,
+              count: count
+            });
+            placeOfOriginData.push({
+              id: `${doc.id}_${yearNum}`,
+              region: doc.id,
+              year: yearNum,
+              count: count || 0
+            });
+          } else {
+            console.log('fetchPlaceOfOriginData - Skipping invalid yearData (missing value/year):', yearData);
+          }
+        });
+      } else {
+        console.log('fetchPlaceOfOriginData - Years field is not an array, data structure unexpected');
+      }
+    });
+    
+    console.log('fetchPlaceOfOriginData - Final data array:', placeOfOriginData);
+    return placeOfOriginData.sort((a, b) => a.year - b.year);
+  } catch (error) {
+    console.error("Error fetching place of origin data:", error);
+    throw error;
+  }
+};
+
+// Add place of origin data for a specific region and year
+export const addPlaceOfOriginData = async (region, year, count) => {
+  try {
+    const docRef = doc(db, "emigrant_placeOfOrigin", region);
+    const docSnap = await getDoc(docRef);
+    
+    let yearsArray = [];
+    
+    if (docSnap.exists()) {
+      const existingData = docSnap.data();
+      yearsArray = existingData.years || [];
+    }
+    
+    // Find if year exists in the array
+    let yearIndex = yearsArray.findIndex(yearData => 
+      yearData && typeof yearData === 'object' && yearData.hasOwnProperty('year') && yearData.year === parseInt(year)
+    );
+    
+    if (yearIndex === -1) {
+      // Add new year object to array
+      yearsArray.push({ year: parseInt(year), value: parseInt(count) });
+    } else {
+      // Update existing year object
+      yearsArray[yearIndex].value = parseInt(count);
+    }
+    
+    await setDoc(docRef, { years: yearsArray });
+    
+    console.log(`Successfully added place of origin data for region ${region}, year ${year}`);
+    return { region, year, count };
+  } catch (error) {
+    console.error("Error adding place of origin data:", error);
+    throw error;
+  }
+};
+
+// Update place of origin data for a specific region and year
+export const updatePlaceOfOriginData = async (region, year, count) => {
+  try {
+    const docRef = doc(db, "emigrant_placeOfOrigin", region);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Region ${region} not found`);
+    }
+    
+    const existingData = docSnap.data();
+    let yearsArray = existingData.years || [];
+    
+    // Find if year exists in the array
+    let yearIndex = yearsArray.findIndex(yearData => 
+      yearData && typeof yearData === 'object' && yearData.hasOwnProperty('year') && yearData.year === parseInt(year)
+    );
+    
+    if (yearIndex === -1) {
+      // Add new year object to array
+      yearsArray.push({ year: parseInt(year), value: parseInt(count) });
+    } else {
+      // Update existing year object
+      yearsArray[yearIndex].value = parseInt(count);
+    }
+    
+    await updateDoc(docRef, { years: yearsArray });
+    
+    console.log(`Successfully updated place of origin data for region ${region}, year ${year}`);
+    return { region, year, count };
+  } catch (error) {
+    console.error("Error updating place of origin data:", error);
+    throw error;
+  }
+};
+
+// Delete place of origin data for a specific region and year
+export const deletePlaceOfOriginData = async (region, year) => {
+  try {
+    const docRef = doc(db, "emigrant_placeOfOrigin", region);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Region ${region} not found`);
+    }
+    
+    const existingData = docSnap.data();
+    let yearsArray = existingData.years || [];
+    
+    // Find and remove the year from the array
+    yearsArray = yearsArray.filter(yearData => 
+      !(yearData && typeof yearData === 'object' && yearData.hasOwnProperty('year') && yearData.year === parseInt(year.toString()))
+    );
+    
+    await updateDoc(docRef, { years: yearsArray });
+    
+    console.log(`Successfully deleted place of origin data for region ${region}, year ${year}`);
+    return { region, year, deleted: true };
+  } catch (error) {
+    console.error("Error deleting place of origin data:", error);
+    throw error;
+  }
+};
+
+// Delete entire region document
+export const deletePlaceOfOriginRegion = async (region) => {
+  try {
+    const docRef = doc(db, "emigrant_placeOfOrigin", region);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Region ${region} not found`);
+    }
+    
+    console.log(`Deleting entire place of origin region: ${region}`);
+    await deleteDoc(docRef);
+    console.log("Successfully deleted entire place of origin region document");
+    
+    return { region, deleted: true };
+  } catch (error) {
+    console.error("Error deleting place of origin region:", error);
+    throw error;
+  }
+};
+
+// Fetch records by dataset type
 export const fetchRecordsByDataset = async (datasetType) => {
   const querySnapshot = await getDocs(collection(db, COLLECTION));
   const allRecords = querySnapshot.docs.map(doc => ({
@@ -1148,6 +1663,49 @@ export const fetchRecordsByDataset = async (datasetType) => {
         return false;
     }
   });
+};
+
+// ========== ORIGINAL COLLECTION FUNCTIONS ==========
+
+// Fetch data from collection
+export const fetchData = async (datasetType) => {
+  try {
+    const querySnapshot = await getDocs(collection(db, COLLECTION));
+    const allRecords = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  
+    // Filter by dataset type based on source field or content
+    return allRecords.filter(record => {
+      const source = record.source?.toLowerCase() || '';
+      const dataset = record.dataset?.toLowerCase() || '';
+      
+      switch(datasetType) {
+        case 'age':
+          return source.includes('age') || dataset.includes('age');
+        case 'all-countries':
+          return source.includes('allcountries') || dataset.includes('all-countries');
+        case 'major-countries':
+          return source.includes('majorcountry') || dataset.includes('major-countries');
+        case 'occupation':
+          return source.includes('occu') || dataset.includes('occupation');
+        case 'sex':
+          return source.includes('sex') || dataset.includes('sex');
+        case 'civil-status':
+          return source.includes('civilstatus') || dataset.includes('civil-status');
+        case 'education':
+          return source.includes('educ') || dataset.includes('education');
+        case 'place-of-origin':
+          return source.includes('placeoforigin') || dataset.includes('place-of-origin');
+        default:
+          return false;
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    throw error;
+  }
 };
 
 // Add record with dataset type

@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Plus, Edit2, Trash2, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useOccupationData } from '../hooks/useOccupationData';
+import { usePlaceOfOriginData } from '../hooks/usePlaceOfOriginData';
 
-const OccupationTable = ({ userRole }) => {
-  const { data, loading, error, addRecord, updateRecord, deleteRecord, removeOccupationGroup } = useOccupationData();
+const PlaceOfOriginTable = ({ userRole }) => {
+  const { data, loading, error, addRecord, updateRecord, deleteRecord } = usePlaceOfOriginData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -11,9 +11,7 @@ const OccupationTable = ({ userRole }) => {
   const [editForm, setEditForm] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({
-    mode: 'existing', // 'existing' or 'new'
-    occupation: '',
-    newOccupation: '',
+    region: '',
     year: '',
     count: ''
   });
@@ -21,96 +19,135 @@ const OccupationTable = ({ userRole }) => {
   const itemsPerPage = 10;
   const isPrivileged = userRole === 'super-admin' || userRole === 'admin';
 
-  // Get unique occupations and years from data
-  const { occupations, availableYears } = useMemo(() => {
-    const occupationsSet = new Set();
-    const yearsSet = new Set();
-    
-    data.forEach(item => {
-      occupationsSet.add(item.occupation);
-      yearsSet.add(item.year);
-    });
-    
-    return {
-      occupations: Array.from(occupationsSet).sort(),
-      availableYears: Array.from(yearsSet).sort((a, b) => a - b)
-    };
-  }, [data]);
-
-  // Generate all years from 1981 to 2020
+  // Generate all years from 1988 to 2020 (based on the data structure)
   const allYears = [];
-  for (let year = 1981; year <= 2020; year++) {
+  for (let year = 1988; year <= 2020; year++) {
     allYears.push(year);
   }
+  
+  console.log('Place of Origin - Available years in data:', [...new Set(data.map(item => item.year))].sort());
+  console.log('Place of Origin - AllYears array:', allYears);
 
-  // Aggregate data based on year selection
-  const aggregatedData = useMemo(() => {
-    const occupationMap = new Map();
-    
+  // Get unique regions
+  const regions = useMemo(() => {
+    const regionList = [...new Set(data.map(item => item.region))];
+    return regionList.sort();
+  }, [data]);
+
+  // Process data based on year selection and search
+  const processedData = useMemo(() => {
+    let filteredData = data;
+
     // Debug logging
-    console.log('Occupation - Raw data:', data);
-    console.log('Occupation - Selected year:', selectedYear);
-    
-    data.forEach(item => {
-      const matchesSearch = item.occupation.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesYear = selectedYear === 'all' || item.year === parseInt(selectedYear);
+    console.log('Place of Origin - Raw data:', data);
+    console.log('Place of Origin - Selected year:', selectedYear);
+
+    // Aggregate data based on year selection
+    if (selectedYear === 'all') {
+      // Aggregate all years - sum counts for each region
+      const regionMap = new Map();
       
-      if (matchesSearch && matchesYear) {
-        if (!occupationMap.has(item.occupation)) {
-          occupationMap.set(item.occupation, {
-            occupation: item.occupation,
-            count: 0,
-            years: new Set(),
-            records: []
-          });
-        }
+      data.forEach(item => {
+        const matchesSearch = item.region.toLowerCase().includes(searchTerm.toLowerCase());
         
-        const occupationData = occupationMap.get(item.occupation);
-        occupationData.count += item.count;
-        occupationData.years.add(item.year);
-        occupationData.records.push(item);
-      }
-    });
-    
-    return Array.from(occupationMap.values()).sort((a, b) => a.occupation.localeCompare(b.occupation));
-  }, [data, searchTerm, selectedYear]);
+        if (matchesSearch) {
+          if (!regionMap.has(item.region)) {
+            regionMap.set(item.region, {
+              region: item.region,
+              count: 0,
+              years: new Set()
+            });
+          }
+          
+          const regionData = regionMap.get(item.region);
+          regionData.count += item.count;
+          regionData.years.add(item.year);
+        }
+      });
+      
+      const aggregatedData = Array.from(regionMap.values()).map(region => ({
+        id: region.region,
+        region: region.region,
+        count: region.count,
+        isAllYears: true,
+        yearCount: region.years.size
+      }));
+      
+      console.log('Place of Origin - Aggregated data for all years:', aggregatedData);
+      return aggregatedData.sort((a, b) => a.region.localeCompare(b.region));
+    } else {
+      // Filter by specific year
+      console.log('Place of Origin - Filtering for specific year:', selectedYear);
+      console.log('Place of Origin - Data before filtering:', data);
+      console.log('Place of Origin - Data sample:', data.slice(0, 3));
+      
+      const parsedYear = parseInt(selectedYear);
+      console.log('Place of Origin - Parsed year:', parsedYear, 'Type:', typeof parsedYear);
+      
+      // Test filtering logic step by step
+      const yearMatches = data.filter(item => {
+        const itemYear = item.year;
+        const matches = itemYear === parsedYear;
+        console.log(`Place of Origin - Year comparison: ${itemYear} === ${parsedYear} = ${matches} (types: ${typeof itemYear} === ${typeof parsedYear})`);
+        return matches;
+      });
+      
+      console.log('Place of Origin - Year matches only:', yearMatches);
+      
+      filteredData = yearMatches.filter(item => 
+        item.region.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      
+      console.log('Place of Origin - Final filtered data for year:', selectedYear, filteredData);
+      console.log('Place of Origin - Filter condition check:', {
+        selectedYear: selectedYear,
+        parsedSelectedYear: parsedYear,
+        searchTerm: searchTerm,
+        itemsFound: filteredData.length,
+        totalDataItems: data.length
+      });
+      
+      return filteredData.sort((a, b) => a.region.localeCompare(b.region));
+    }
+  }, [data, selectedYear, searchTerm]);
 
   // Pagination
-  const totalPages = Math.ceil(aggregatedData.length / itemsPerPage);
+  const totalPages = Math.ceil(processedData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = aggregatedData.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedData = processedData.slice(startIndex, startIndex + itemsPerPage);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const totalOccupations = aggregatedData.length;
-    const totalSum = aggregatedData.reduce((sum, item) => sum + item.count, 0);
+    const totalRecords = processedData.length;
+    const totalCount = processedData.reduce((sum, item) => sum + item.count, 0);
     const yearRange = selectedYear === 'all' ? 'All Years' : selectedYear;
     
-    return { totalOccupations, totalSum, yearRange };
-  }, [aggregatedData, selectedYear]);
+    return { totalRecords, totalCount, yearRange };
+  }, [processedData, selectedYear]);
 
   const handleEdit = (record) => {
-    if (selectedYear === 'all') {
-      alert('Please select a specific year to edit data');
-      return;
-    }
-    
-    // Find the specific record for the selected year
-    const specificRecord = record.records.find(r => r.year === parseInt(selectedYear));
-    if (specificRecord) {
-      setEditingRow(record.occupation);
-      setEditForm({
-        occupation: record.occupation,
-        year: parseInt(selectedYear),
-        count: specificRecord.count
-      });
+    if (record.isAllYears) {
+      // For aggregated data, we need to find the first year for this region
+      const firstYearRecord = data.find(item => item.region === record.region);
+      if (firstYearRecord) {
+        setEditingRow(record.id);
+        setEditForm({
+          id: record.id,
+          region: record.region,
+          year: firstYearRecord.year,
+          count: record.count,
+          originalYear: firstYearRecord.year
+        });
+      }
     } else {
-      // Create a new record for this year if it doesn't exist
-      setEditingRow(record.occupation);
+      // For specific year data
+      setEditingRow(record.id);
       setEditForm({
-        occupation: record.occupation,
-        year: parseInt(selectedYear),
-        count: 0
+        id: record.id,
+        region: record.region,
+        year: record.year,
+        count: record.count,
+        originalYear: record.year
       });
     }
   };
@@ -119,7 +156,7 @@ const OccupationTable = ({ userRole }) => {
     if (!editingRow) return;
     
     try {
-      await updateRecord(editForm.occupation, editForm.year, editForm.count);
+      await updateRecord(editForm.region, editForm.year, editForm.count);
       setEditingRow(null);
       setEditForm({});
     } catch (error) {
@@ -128,38 +165,26 @@ const OccupationTable = ({ userRole }) => {
     }
   };
 
-  const handleDelete = async (occupation) => {
-    if (selectedYear === 'all') {
-      if (window.confirm(`Are you sure you want to delete all data for ${occupation} across all years?`)) {
-        try {
-          await removeOccupationGroup(occupation);
-        } catch (error) {
-          console.error('Error deleting occupation group:', error);
-          alert('Error deleting occupation group: ' + error.message);
-        }
-      }
-    } else {
-      if (window.confirm(`Are you sure you want to delete ${occupation} data for year ${selectedYear}?`)) {
-        try {
-          await deleteRecord(occupation, parseInt(selectedYear));
-        } catch (error) {
-          console.error('Error deleting record:', error);
-          alert('Error deleting record: ' + error.message);
-        }
+  const handleDelete = async (region, year) => {
+    if (window.confirm(`Are you sure you want to delete place of origin data for region "${region}" in year ${year}?`)) {
+      try {
+        await deleteRecord(region, year);
+      } catch (error) {
+        console.error('Error deleting record:', error);
+        alert('Error deleting record: ' + error.message);
       }
     }
   };
 
   const handleAdd = async () => {
-    if (!addForm.occupation || !addForm.year || !addForm.count) {
+    if (!addForm.region || !addForm.year || !addForm.count) {
       alert('Please fill all fields');
       return;
     }
 
     try {
-      const occupation = addForm.mode === 'new' ? addForm.newOccupation : addForm.occupation;
-      await addRecord(occupation, parseInt(addForm.year), parseInt(addForm.count));
-      setAddForm({ mode: 'existing', occupation: '', newOccupation: '', year: '', count: '' });
+      await addRecord(addForm.region, parseInt(addForm.year), parseInt(addForm.count));
+      setAddForm({ region: '', year: '', count: '' });
       setShowAddForm(false);
     } catch (error) {
       console.error('Error adding record:', error);
@@ -171,7 +196,7 @@ const OccupationTable = ({ userRole }) => {
     return (
       <div className="data-table__loading">
         <div className="loading-spinner"></div>
-        <p>Loading occupation data...</p>
+        <p>Loading place of origin data...</p>
       </div>
     );
   }
@@ -179,7 +204,7 @@ const OccupationTable = ({ userRole }) => {
   if (error) {
     return (
       <div className="data-table__error">
-        <p>Error loading occupation data: {error}</p>
+        <p>Error loading place of origin data: {error}</p>
         <button onClick={() => window.location.reload()} className="button button--primary">
           Retry
         </button>
@@ -191,8 +216,8 @@ const OccupationTable = ({ userRole }) => {
     <div className="data-table">
       {/* Table Summary Header */}
       <div className="table-summary-header">
-        <h3>Occupation Data</h3>
-        <p>Emigrant data by occupation categories from 1981-2020</p>
+        <h3>Place of Origin Data</h3>
+        <p>Emigrant data by Philippine regions from 1988-2020</p>
         
         {/* Summary Statistics */}
         <div className="summary-stats">
@@ -200,10 +225,10 @@ const OccupationTable = ({ userRole }) => {
             <strong>Year Range:</strong> {stats.yearRange}
           </div>
           <div className="stat-item">
-            <strong>Total Occupations:</strong> {stats.totalOccupations}
+            <strong>Total Records:</strong> {stats.totalRecords}
           </div>
           <div className="stat-item">
-            <strong>Total Count:</strong> {stats.totalSum.toLocaleString()}
+            <strong>Total Count:</strong> {stats.totalCount.toLocaleString()}
           </div>
         </div>
       </div>
@@ -214,7 +239,7 @@ const OccupationTable = ({ userRole }) => {
           <Search size={20} />
           <input
             type="text"
-            placeholder="Search occupations..."
+            placeholder="Search by region or count..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
@@ -249,50 +274,19 @@ const OccupationTable = ({ userRole }) => {
       {/* Add Form */}
       {showAddForm && (
         <div className="add-form">
-          <h4>Add New Occupation Record</h4>
-          
-          {/* Mode Selection */}
-          <div className="form-group">
-            <label>Add Mode:</label>
-            <div className="mode-buttons">
-              <button
-                type="button"
-                onClick={() => setAddForm({...addForm, mode: 'existing'})}
-                className={`button ${addForm.mode === 'existing' ? 'button--primary' : 'button--ghost'}`}
-              >
-                Add to Existing Occupation
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddForm({...addForm, mode: 'new'})}
-                className={`button ${addForm.mode === 'new' ? 'button--primary' : 'button--ghost'}`}
-              >
-                Create New Occupation
-              </button>
-            </div>
-          </div>
+          <h4>Add New Place of Origin Record</h4>
 
           <div className="form-grid">
-            {addForm.mode === 'existing' ? (
-              <select
-                value={addForm.occupation}
-                onChange={(e) => setAddForm({...addForm, occupation: e.target.value})}
-                className="form-input"
-              >
-                <option value="">Select Occupation</option>
-                {occupations.map(occupation => (
-                  <option key={occupation} value={occupation}>{occupation}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                placeholder="Enter new occupation name..."
-                value={addForm.newOccupation}
-                onChange={(e) => setAddForm({...addForm, newOccupation: e.target.value})}
-                className="form-input"
-              />
-            )}
+            <select
+              value={addForm.region}
+              onChange={(e) => setAddForm({...addForm, region: e.target.value})}
+              className="form-input"
+            >
+              <option value="">Select Region</option>
+              {regions.map(region => (
+                <option key={region} value={region}>{region}</option>
+              ))}
+            </select>
             
             <input
               type="number"
@@ -300,7 +294,7 @@ const OccupationTable = ({ userRole }) => {
               value={addForm.year}
               onChange={(e) => setAddForm({...addForm, year: e.target.value})}
               className="form-input"
-              min="1981"
+              min="1988"
               max="2020"
             />
             
@@ -330,23 +324,27 @@ const OccupationTable = ({ userRole }) => {
       {/* Edit Form */}
       {editingRow && (
         <div className="add-form">
-          <h4>Edit Occupation Record</h4>
+          <h4>Edit Place of Origin Record</h4>
           
           <div className="form-grid">
-            <input
-              type="text"
-              value={editForm.occupation}
-              disabled
+            <select
+              value={editForm.region}
+              onChange={(e) => setEditForm({...editForm, region: e.target.value})}
               className="form-input"
-              style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
-            />
+            >
+              {regions.map(region => (
+                <option key={region} value={region}>{region}</option>
+              ))}
+            </select>
             
             <input
               type="number"
               value={editForm.year}
-              disabled
+              onChange={(e) => setEditForm({...editForm, year: parseInt(e.target.value)})}
               className="form-input"
-              style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
+              min="1988"
+              max="2020"
+              placeholder="Year"
             />
             
             <input
@@ -377,30 +375,31 @@ const OccupationTable = ({ userRole }) => {
         <table className="data-table__table">
           <thead>
             <tr>
-              <th>Occupation</th>
+              <th>Region</th>
               <th>Count</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {paginatedData.map((record) => (
-              <tr key={record.occupation}>
-                <td>{record.occupation}</td>
+              <tr key={record.id}>
+                <td>{record.region}</td>
                 <td>{record.count.toLocaleString()}</td>
                 <td>
                   <div className="action-buttons">
                     <button
                       onClick={() => handleEdit(record)}
                       className="button button--sm button--primary"
-                      disabled={selectedYear === 'all'}
-                      title={selectedYear === 'all' ? 'Select a specific year to edit' : 'Edit record'}
+                      disabled={!isPrivileged || record.isAllYears}
+                      title={!isPrivileged ? 'Insufficient permissions' : record.isAllYears ? 'Select a specific year to edit' : 'Edit record'}
                     >
                       <Edit2 size={14} />
                     </button>
                     <button
-                      onClick={() => handleDelete(record.occupation)}
+                      onClick={() => handleDelete(record.region, record.year)}
                       className="button button--sm button--danger"
-                      title={selectedYear === 'all' ? 'Delete all years' : `Delete year ${selectedYear}`}
+                      disabled={!isPrivileged || record.isAllYears}
+                      title={!isPrivileged ? 'Insufficient permissions' : record.isAllYears ? 'Select a specific year to delete' : `Delete year ${record.year}`}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -413,7 +412,7 @@ const OccupationTable = ({ userRole }) => {
         
         {paginatedData.length === 0 && (
           <div className="no-data">
-            No occupation data found for the selected criteria.
+            No place of origin data found for the selected criteria.
           </div>
         )}
       </div>
@@ -448,4 +447,4 @@ const OccupationTable = ({ userRole }) => {
   );
 };
 
-export default OccupationTable;
+export default PlaceOfOriginTable;

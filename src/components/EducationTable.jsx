@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Plus, Edit2, Trash2, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useOccupationData } from '../hooks/useOccupationData';
+import { useEducationData } from '../hooks/useEducationData';
 
-const OccupationTable = ({ userRole }) => {
-  const { data, loading, error, addRecord, updateRecord, deleteRecord, removeOccupationGroup } = useOccupationData();
+const EducationTable = ({ userRole }) => {
+  const { data, loading, error, addRecord, updateRecord, deleteRecord } = useEducationData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -11,9 +11,7 @@ const OccupationTable = ({ userRole }) => {
   const [editForm, setEditForm] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({
-    mode: 'existing', // 'existing' or 'new'
-    occupation: '',
-    newOccupation: '',
+    educationGroup: '',
     year: '',
     count: ''
   });
@@ -21,96 +19,121 @@ const OccupationTable = ({ userRole }) => {
   const itemsPerPage = 10;
   const isPrivileged = userRole === 'super-admin' || userRole === 'admin';
 
-  // Get unique occupations and years from data
-  const { occupations, availableYears } = useMemo(() => {
-    const occupationsSet = new Set();
-    const yearsSet = new Set();
-    
-    data.forEach(item => {
-      occupationsSet.add(item.occupation);
-      yearsSet.add(item.year);
-    });
-    
-    return {
-      occupations: Array.from(occupationsSet).sort(),
-      availableYears: Array.from(yearsSet).sort((a, b) => a - b)
-    };
-  }, [data]);
-
-  // Generate all years from 1981 to 2020
+  // Generate all years from 1988 to 2020 (based on the data structure)
   const allYears = [];
-  for (let year = 1981; year <= 2020; year++) {
+  for (let year = 1988; year <= 2020; year++) {
     allYears.push(year);
   }
+  
+  console.log('Education - Available years in data:', [...new Set(data.map(item => item.year))].sort());
+  console.log('Education - AllYears array:', allYears);
 
-  // Aggregate data based on year selection
-  const aggregatedData = useMemo(() => {
-    const occupationMap = new Map();
-    
+  // Get unique education groups
+  const educationGroups = useMemo(() => {
+    const groups = [...new Set(data.map(item => item.educationGroup))];
+    return groups.sort();
+  }, [data]);
+
+  // Process data based on year selection and search
+  const processedData = useMemo(() => {
+    let filteredData = data;
+
     // Debug logging
-    console.log('Occupation - Raw data:', data);
-    console.log('Occupation - Selected year:', selectedYear);
-    
-    data.forEach(item => {
-      const matchesSearch = item.occupation.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesYear = selectedYear === 'all' || item.year === parseInt(selectedYear);
+    console.log('Education - Raw data:', data);
+    console.log('Education - Selected year:', selectedYear);
+
+    // Aggregate data based on year selection
+    if (selectedYear === 'all') {
+      // Aggregate all years - sum counts for each education group
+      const educationGroupMap = new Map();
       
-      if (matchesSearch && matchesYear) {
-        if (!occupationMap.has(item.occupation)) {
-          occupationMap.set(item.occupation, {
-            occupation: item.occupation,
-            count: 0,
-            years: new Set(),
-            records: []
-          });
-        }
+      data.forEach(item => {
+        const matchesSearch = item.educationGroup.toLowerCase().includes(searchTerm.toLowerCase());
         
-        const occupationData = occupationMap.get(item.occupation);
-        occupationData.count += item.count;
-        occupationData.years.add(item.year);
-        occupationData.records.push(item);
-      }
-    });
-    
-    return Array.from(occupationMap.values()).sort((a, b) => a.occupation.localeCompare(b.occupation));
-  }, [data, searchTerm, selectedYear]);
+        if (matchesSearch) {
+          if (!educationGroupMap.has(item.educationGroup)) {
+            educationGroupMap.set(item.educationGroup, {
+              educationGroup: item.educationGroup,
+              count: 0,
+              years: new Set()
+            });
+          }
+          
+          const groupData = educationGroupMap.get(item.educationGroup);
+          groupData.count += item.count;
+          groupData.years.add(item.year);
+        }
+      });
+      
+      const aggregatedData = Array.from(educationGroupMap.values()).map(group => ({
+        id: group.educationGroup,
+        educationGroup: group.educationGroup,
+        count: group.count,
+        isAllYears: true,
+        yearCount: group.years.size
+      }));
+      
+      console.log('Education - Aggregated data for all years:', aggregatedData);
+      return aggregatedData.sort((a, b) => a.educationGroup.localeCompare(b.educationGroup));
+    } else {
+      // Filter by specific year
+      console.log('Education - Filtering for specific year:', selectedYear);
+      console.log('Education - Data before filtering:', data);
+      
+      filteredData = filteredData.filter(item => 
+        item.year === parseInt(selectedYear) &&
+        item.educationGroup.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      
+      console.log('Education - Filtered data for year:', selectedYear, filteredData);
+      console.log('Education - Filter condition check:', {
+        selectedYear: selectedYear,
+        parsedSelectedYear: parseInt(selectedYear),
+        searchTerm: searchTerm,
+        itemsFound: filteredData.length
+      });
+      
+      return filteredData.sort((a, b) => a.educationGroup.localeCompare(b.educationGroup));
+    }
+  }, [data, selectedYear, searchTerm]);
 
   // Pagination
-  const totalPages = Math.ceil(aggregatedData.length / itemsPerPage);
+  const totalPages = Math.ceil(processedData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = aggregatedData.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedData = processedData.slice(startIndex, startIndex + itemsPerPage);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const totalOccupations = aggregatedData.length;
-    const totalSum = aggregatedData.reduce((sum, item) => sum + item.count, 0);
+    const totalRecords = processedData.length;
+    const totalCount = processedData.reduce((sum, item) => sum + item.count, 0);
     const yearRange = selectedYear === 'all' ? 'All Years' : selectedYear;
     
-    return { totalOccupations, totalSum, yearRange };
-  }, [aggregatedData, selectedYear]);
+    return { totalRecords, totalCount, yearRange };
+  }, [processedData, selectedYear]);
 
   const handleEdit = (record) => {
-    if (selectedYear === 'all') {
-      alert('Please select a specific year to edit data');
-      return;
-    }
-    
-    // Find the specific record for the selected year
-    const specificRecord = record.records.find(r => r.year === parseInt(selectedYear));
-    if (specificRecord) {
-      setEditingRow(record.occupation);
-      setEditForm({
-        occupation: record.occupation,
-        year: parseInt(selectedYear),
-        count: specificRecord.count
-      });
+    if (record.isAllYears) {
+      // For aggregated data, we need to find the first year for this education group
+      const firstYearRecord = data.find(item => item.educationGroup === record.educationGroup);
+      if (firstYearRecord) {
+        setEditingRow(record.id);
+        setEditForm({
+          id: record.id,
+          educationGroup: record.educationGroup,
+          year: firstYearRecord.year,
+          count: record.count,
+          originalYear: firstYearRecord.year
+        });
+      }
     } else {
-      // Create a new record for this year if it doesn't exist
-      setEditingRow(record.occupation);
+      // For specific year data
+      setEditingRow(record.id);
       setEditForm({
-        occupation: record.occupation,
-        year: parseInt(selectedYear),
-        count: 0
+        id: record.id,
+        educationGroup: record.educationGroup,
+        year: record.year,
+        count: record.count,
+        originalYear: record.year
       });
     }
   };
@@ -119,7 +142,7 @@ const OccupationTable = ({ userRole }) => {
     if (!editingRow) return;
     
     try {
-      await updateRecord(editForm.occupation, editForm.year, editForm.count);
+      await updateRecord(editForm.educationGroup, editForm.year, editForm.count);
       setEditingRow(null);
       setEditForm({});
     } catch (error) {
@@ -128,38 +151,26 @@ const OccupationTable = ({ userRole }) => {
     }
   };
 
-  const handleDelete = async (occupation) => {
-    if (selectedYear === 'all') {
-      if (window.confirm(`Are you sure you want to delete all data for ${occupation} across all years?`)) {
-        try {
-          await removeOccupationGroup(occupation);
-        } catch (error) {
-          console.error('Error deleting occupation group:', error);
-          alert('Error deleting occupation group: ' + error.message);
-        }
-      }
-    } else {
-      if (window.confirm(`Are you sure you want to delete ${occupation} data for year ${selectedYear}?`)) {
-        try {
-          await deleteRecord(occupation, parseInt(selectedYear));
-        } catch (error) {
-          console.error('Error deleting record:', error);
-          alert('Error deleting record: ' + error.message);
-        }
+  const handleDelete = async (educationGroup, year) => {
+    if (window.confirm(`Are you sure you want to delete education data for group "${educationGroup}" in year ${year}?`)) {
+      try {
+        await deleteRecord(educationGroup, year);
+      } catch (error) {
+        console.error('Error deleting record:', error);
+        alert('Error deleting record: ' + error.message);
       }
     }
   };
 
   const handleAdd = async () => {
-    if (!addForm.occupation || !addForm.year || !addForm.count) {
+    if (!addForm.educationGroup || !addForm.year || !addForm.count) {
       alert('Please fill all fields');
       return;
     }
 
     try {
-      const occupation = addForm.mode === 'new' ? addForm.newOccupation : addForm.occupation;
-      await addRecord(occupation, parseInt(addForm.year), parseInt(addForm.count));
-      setAddForm({ mode: 'existing', occupation: '', newOccupation: '', year: '', count: '' });
+      await addRecord(addForm.educationGroup, parseInt(addForm.year), parseInt(addForm.count));
+      setAddForm({ educationGroup: '', year: '', count: '' });
       setShowAddForm(false);
     } catch (error) {
       console.error('Error adding record:', error);
@@ -171,7 +182,7 @@ const OccupationTable = ({ userRole }) => {
     return (
       <div className="data-table__loading">
         <div className="loading-spinner"></div>
-        <p>Loading occupation data...</p>
+        <p>Loading education data...</p>
       </div>
     );
   }
@@ -179,7 +190,7 @@ const OccupationTable = ({ userRole }) => {
   if (error) {
     return (
       <div className="data-table__error">
-        <p>Error loading occupation data: {error}</p>
+        <p>Error loading education data: {error}</p>
         <button onClick={() => window.location.reload()} className="button button--primary">
           Retry
         </button>
@@ -191,8 +202,8 @@ const OccupationTable = ({ userRole }) => {
     <div className="data-table">
       {/* Table Summary Header */}
       <div className="table-summary-header">
-        <h3>Occupation Data</h3>
-        <p>Emigrant data by occupation categories from 1981-2020</p>
+        <h3>Education Data</h3>
+        <p>Emigrant data by educational attainment from 1981-2020</p>
         
         {/* Summary Statistics */}
         <div className="summary-stats">
@@ -200,10 +211,10 @@ const OccupationTable = ({ userRole }) => {
             <strong>Year Range:</strong> {stats.yearRange}
           </div>
           <div className="stat-item">
-            <strong>Total Occupations:</strong> {stats.totalOccupations}
+            <strong>Total Records:</strong> {stats.totalRecords}
           </div>
           <div className="stat-item">
-            <strong>Total Count:</strong> {stats.totalSum.toLocaleString()}
+            <strong>Total Count:</strong> {stats.totalCount.toLocaleString()}
           </div>
         </div>
       </div>
@@ -214,7 +225,7 @@ const OccupationTable = ({ userRole }) => {
           <Search size={20} />
           <input
             type="text"
-            placeholder="Search occupations..."
+            placeholder="Search by education group or count..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
@@ -249,50 +260,19 @@ const OccupationTable = ({ userRole }) => {
       {/* Add Form */}
       {showAddForm && (
         <div className="add-form">
-          <h4>Add New Occupation Record</h4>
-          
-          {/* Mode Selection */}
-          <div className="form-group">
-            <label>Add Mode:</label>
-            <div className="mode-buttons">
-              <button
-                type="button"
-                onClick={() => setAddForm({...addForm, mode: 'existing'})}
-                className={`button ${addForm.mode === 'existing' ? 'button--primary' : 'button--ghost'}`}
-              >
-                Add to Existing Occupation
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddForm({...addForm, mode: 'new'})}
-                className={`button ${addForm.mode === 'new' ? 'button--primary' : 'button--ghost'}`}
-              >
-                Create New Occupation
-              </button>
-            </div>
-          </div>
+          <h4>Add New Education Record</h4>
 
           <div className="form-grid">
-            {addForm.mode === 'existing' ? (
-              <select
-                value={addForm.occupation}
-                onChange={(e) => setAddForm({...addForm, occupation: e.target.value})}
-                className="form-input"
-              >
-                <option value="">Select Occupation</option>
-                {occupations.map(occupation => (
-                  <option key={occupation} value={occupation}>{occupation}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                placeholder="Enter new occupation name..."
-                value={addForm.newOccupation}
-                onChange={(e) => setAddForm({...addForm, newOccupation: e.target.value})}
-                className="form-input"
-              />
-            )}
+            <select
+              value={addForm.educationGroup}
+              onChange={(e) => setAddForm({...addForm, educationGroup: e.target.value})}
+              className="form-input"
+            >
+              <option value="">Select Education Group</option>
+              {educationGroups.map(group => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
             
             <input
               type="number"
@@ -300,7 +280,7 @@ const OccupationTable = ({ userRole }) => {
               value={addForm.year}
               onChange={(e) => setAddForm({...addForm, year: e.target.value})}
               className="form-input"
-              min="1981"
+              min="1988"
               max="2020"
             />
             
@@ -330,23 +310,27 @@ const OccupationTable = ({ userRole }) => {
       {/* Edit Form */}
       {editingRow && (
         <div className="add-form">
-          <h4>Edit Occupation Record</h4>
+          <h4>Edit Education Record</h4>
           
           <div className="form-grid">
-            <input
-              type="text"
-              value={editForm.occupation}
-              disabled
+            <select
+              value={editForm.educationGroup}
+              onChange={(e) => setEditForm({...editForm, educationGroup: e.target.value})}
               className="form-input"
-              style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
-            />
+            >
+              {educationGroups.map(group => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
             
             <input
               type="number"
               value={editForm.year}
-              disabled
+              onChange={(e) => setEditForm({...editForm, year: parseInt(e.target.value)})}
               className="form-input"
-              style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
+              min="1988"
+              max="2020"
+              placeholder="Year"
             />
             
             <input
@@ -377,30 +361,31 @@ const OccupationTable = ({ userRole }) => {
         <table className="data-table__table">
           <thead>
             <tr>
-              <th>Occupation</th>
+              <th>Education Group</th>
               <th>Count</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {paginatedData.map((record) => (
-              <tr key={record.occupation}>
-                <td>{record.occupation}</td>
+              <tr key={record.id}>
+                <td>{record.educationGroup}</td>
                 <td>{record.count.toLocaleString()}</td>
                 <td>
                   <div className="action-buttons">
                     <button
                       onClick={() => handleEdit(record)}
                       className="button button--sm button--primary"
-                      disabled={selectedYear === 'all'}
-                      title={selectedYear === 'all' ? 'Select a specific year to edit' : 'Edit record'}
+                      disabled={!isPrivileged || record.isAllYears}
+                      title={!isPrivileged ? 'Insufficient permissions' : record.isAllYears ? 'Select a specific year to edit' : 'Edit record'}
                     >
                       <Edit2 size={14} />
                     </button>
                     <button
-                      onClick={() => handleDelete(record.occupation)}
+                      onClick={() => handleDelete(record.educationGroup, record.year)}
                       className="button button--sm button--danger"
-                      title={selectedYear === 'all' ? 'Delete all years' : `Delete year ${selectedYear}`}
+                      disabled={!isPrivileged || record.isAllYears}
+                      title={!isPrivileged ? 'Insufficient permissions' : record.isAllYears ? 'Select a specific year to delete' : `Delete year ${record.year}`}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -413,7 +398,7 @@ const OccupationTable = ({ userRole }) => {
         
         {paginatedData.length === 0 && (
           <div className="no-data">
-            No occupation data found for the selected criteria.
+            No education data found for the selected criteria.
           </div>
         )}
       </div>
@@ -448,4 +433,4 @@ const OccupationTable = ({ userRole }) => {
   );
 };
 
-export default OccupationTable;
+export default EducationTable;

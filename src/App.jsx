@@ -9,11 +9,19 @@ import { useAgeData } from './hooks/useAgeData';
 import { useCountriesData } from './hooks/useCountriesData';
 import { useMajorCountriesData } from './hooks/useMajorCountriesData';
 import { useOccupationData } from './hooks/useOccupationData';
+import { useSexData } from './hooks/useSexData';
+import { useCivilStatusData } from './hooks/useCivilStatusData';
+import { useEducationData } from './hooks/useEducationData';
+import { usePlaceOfOriginData } from './hooks/usePlaceOfOriginData';
 import { useDatasetData } from './hooks/useDatasetData';
 import AgeDataTable from "./components/AgeDataTable";
 import AllCountriesTable from "./components/AllCountriesTable";
 import MajorCountriesTable from "./components/MajorCountriesTable";
 import OccupationTable from "./components/OccupationTable";
+import SexTable from "./components/SexTable";
+import CivilStatusTable from "./components/CivilStatusTable";
+import EducationTable from "./components/EducationTable";
+import PlaceOfOriginTable from "./components/PlaceOfOriginTable";
 import DataTable from "./components/DataTable";
 import ForecastPanel from "./components/ForecastPanel"; 
 import TabNavigation from "./components/TabNavigation";
@@ -81,6 +89,10 @@ const App = () => {
   const countriesData = useCountriesData();
   const majorCountriesData = useMajorCountriesData();
   const occupationData = useOccupationData();
+  const sexDataNew = useSexData();
+  const civilStatusDataNew = useCivilStatusData();
+  const educationDataNew = useEducationData();
+  const placeOfOriginDataNew = usePlaceOfOriginData();
   const allCountriesData = useDatasetData('all-countries');
   const majorCountriesDataOld = useDatasetData('major-countries');
   const occupationDataOld = useDatasetData('occupation');
@@ -640,7 +652,7 @@ const App = () => {
                         </div>
                         <span className="role-chip">Emigrant-1981-2020-Occu.csv</span>
                       </div>
-                      <OccupationTable />
+                      <OccupationTable userRole={userRole} />
                     </div>
                   )}
 
@@ -655,15 +667,7 @@ const App = () => {
                         </div>
                         <span className="role-chip">Emigrant-1981-2020-Sex.csv</span>
                       </div>
-                      <DataTable
-                        data={sexData.data}
-                        setData={sexData.setData}
-                        schema={schema}
-                        types={types}
-                        userRole={userRole}
-                        loading={sexData.loading}
-                        error={sexData.error}
-                      />
+                      <SexTable userRole={userRole} />
                     </div>
                   )}
 
@@ -678,15 +682,7 @@ const App = () => {
                         </div>
                         <span className="role-chip">Emigrant-1988-2020-CivilStatus.csv</span>
                       </div>
-                      <DataTable
-                        data={civilStatusData.data}
-                        setData={civilStatusData.setData}
-                        schema={schema}
-                        types={types}
-                        userRole={userRole}
-                        loading={civilStatusData.loading}
-                        error={civilStatusData.error}
-                      />
+                      <CivilStatusTable userRole={userRole} />
                     </div>
                   )}
 
@@ -701,15 +697,7 @@ const App = () => {
                         </div>
                         <span className="role-chip">Emigrant-1988-2020-Educ.csv</span>
                       </div>
-                      <DataTable
-                        data={educationData.data}
-                        setData={educationData.setData}
-                        schema={schema}
-                        types={types}
-                        userRole={userRole}
-                        loading={educationData.loading}
-                        error={educationData.error}
-                      />
+                      <EducationTable userRole={userRole} />
                     </div>
                   )}
 
@@ -724,15 +712,7 @@ const App = () => {
                         </div>
                         <span className="role-chip">Emigrant-1988-2020-PlaceOfOrigin.csv</span>
                       </div>
-                      <DataTable
-                        data={placeOfOriginData.data}
-                        setData={placeOfOriginData.setData}
-                        schema={schema}
-                        types={types}
-                        userRole={userRole}
-                        loading={placeOfOriginData.loading}
-                        error={placeOfOriginData.error}
-                      />
+                      <PlaceOfOriginTable userRole={userRole} />
                     </div>
                   )}
 

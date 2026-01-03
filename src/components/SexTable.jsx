@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Plus, Edit2, Trash2, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useOccupationData } from '../hooks/useOccupationData';
+import { useSexData } from '../hooks/useSexData';
 
-const OccupationTable = ({ userRole }) => {
-  const { data, loading, error, addRecord, updateRecord, deleteRecord, removeOccupationGroup } = useOccupationData();
+const SexTable = ({ userRole }) => {
+  const { data, loading, error, addRecord, updateRecord, deleteRecord } = useSexData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -11,31 +11,13 @@ const OccupationTable = ({ userRole }) => {
   const [editForm, setEditForm] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({
-    mode: 'existing', // 'existing' or 'new'
-    occupation: '',
-    newOccupation: '',
     year: '',
-    count: ''
+    female: '',
+    male: ''
   });
 
   const itemsPerPage = 10;
   const isPrivileged = userRole === 'super-admin' || userRole === 'admin';
-
-  // Get unique occupations and years from data
-  const { occupations, availableYears } = useMemo(() => {
-    const occupationsSet = new Set();
-    const yearsSet = new Set();
-    
-    data.forEach(item => {
-      occupationsSet.add(item.occupation);
-      yearsSet.add(item.year);
-    });
-    
-    return {
-      occupations: Array.from(occupationsSet).sort(),
-      availableYears: Array.from(yearsSet).sort((a, b) => a - b)
-    };
-  }, [data]);
 
   // Generate all years from 1981 to 2020
   const allYears = [];
@@ -43,83 +25,62 @@ const OccupationTable = ({ userRole }) => {
     allYears.push(year);
   }
 
-  // Aggregate data based on year selection
-  const aggregatedData = useMemo(() => {
-    const occupationMap = new Map();
-    
+  // Process data based on year selection and search
+  const processedData = useMemo(() => {
+    let filteredData = data;
+
     // Debug logging
-    console.log('Occupation - Raw data:', data);
-    console.log('Occupation - Selected year:', selectedYear);
-    
-    data.forEach(item => {
-      const matchesSearch = item.occupation.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesYear = selectedYear === 'all' || item.year === parseInt(selectedYear);
-      
-      if (matchesSearch && matchesYear) {
-        if (!occupationMap.has(item.occupation)) {
-          occupationMap.set(item.occupation, {
-            occupation: item.occupation,
-            count: 0,
-            years: new Set(),
-            records: []
-          });
-        }
-        
-        const occupationData = occupationMap.get(item.occupation);
-        occupationData.count += item.count;
-        occupationData.years.add(item.year);
-        occupationData.records.push(item);
-      }
-    });
-    
-    return Array.from(occupationMap.values()).sort((a, b) => a.occupation.localeCompare(b.occupation));
-  }, [data, searchTerm, selectedYear]);
+    console.log('Sex - Raw data:', data);
+    console.log('Sex - Selected year:', selectedYear);
+
+    // Filter by year
+    if (selectedYear !== 'all') {
+      filteredData = filteredData.filter(item => item.year === parseInt(selectedYear));
+      console.log('Sex - Filtered data for year:', selectedYear, filteredData);
+    }
+
+    // Filter by search term
+    if (searchTerm) {
+      filteredData = filteredData.filter(item => 
+        item.year.toString().includes(searchTerm) ||
+        item.female.toString().includes(searchTerm) ||
+        item.male.toString().includes(searchTerm)
+      );
+    }
+
+    return filteredData.sort((a, b) => a.year - b.year);
+  }, [data, selectedYear, searchTerm]);
 
   // Pagination
-  const totalPages = Math.ceil(aggregatedData.length / itemsPerPage);
+  const totalPages = Math.ceil(processedData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = aggregatedData.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedData = processedData.slice(startIndex, startIndex + itemsPerPage);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const totalOccupations = aggregatedData.length;
-    const totalSum = aggregatedData.reduce((sum, item) => sum + item.count, 0);
+    const totalYears = processedData.length;
+    const totalFemale = processedData.reduce((sum, item) => sum + item.female, 0);
+    const totalMale = processedData.reduce((sum, item) => sum + item.male, 0);
+    const totalSum = totalFemale + totalMale;
     const yearRange = selectedYear === 'all' ? 'All Years' : selectedYear;
     
-    return { totalOccupations, totalSum, yearRange };
-  }, [aggregatedData, selectedYear]);
+    return { totalYears, totalFemale, totalMale, totalSum, yearRange };
+  }, [processedData, selectedYear]);
 
   const handleEdit = (record) => {
-    if (selectedYear === 'all') {
-      alert('Please select a specific year to edit data');
-      return;
-    }
-    
-    // Find the specific record for the selected year
-    const specificRecord = record.records.find(r => r.year === parseInt(selectedYear));
-    if (specificRecord) {
-      setEditingRow(record.occupation);
-      setEditForm({
-        occupation: record.occupation,
-        year: parseInt(selectedYear),
-        count: specificRecord.count
-      });
-    } else {
-      // Create a new record for this year if it doesn't exist
-      setEditingRow(record.occupation);
-      setEditForm({
-        occupation: record.occupation,
-        year: parseInt(selectedYear),
-        count: 0
-      });
-    }
+    setEditingRow(record.year);
+    setEditForm({
+      year: record.year,
+      female: record.female,
+      male: record.male
+    });
   };
 
   const handleUpdate = async () => {
     if (!editingRow) return;
     
     try {
-      await updateRecord(editForm.occupation, editForm.year, editForm.count);
+      await updateRecord(editForm.year, editForm.female, editForm.male);
       setEditingRow(null);
       setEditForm({});
     } catch (error) {
@@ -128,38 +89,26 @@ const OccupationTable = ({ userRole }) => {
     }
   };
 
-  const handleDelete = async (occupation) => {
-    if (selectedYear === 'all') {
-      if (window.confirm(`Are you sure you want to delete all data for ${occupation} across all years?`)) {
-        try {
-          await removeOccupationGroup(occupation);
-        } catch (error) {
-          console.error('Error deleting occupation group:', error);
-          alert('Error deleting occupation group: ' + error.message);
-        }
-      }
-    } else {
-      if (window.confirm(`Are you sure you want to delete ${occupation} data for year ${selectedYear}?`)) {
-        try {
-          await deleteRecord(occupation, parseInt(selectedYear));
-        } catch (error) {
-          console.error('Error deleting record:', error);
-          alert('Error deleting record: ' + error.message);
-        }
+  const handleDelete = async (year) => {
+    if (window.confirm(`Are you sure you want to delete sex data for year ${year}?`)) {
+      try {
+        await deleteRecord(year);
+      } catch (error) {
+        console.error('Error deleting record:', error);
+        alert('Error deleting record: ' + error.message);
       }
     }
   };
 
   const handleAdd = async () => {
-    if (!addForm.occupation || !addForm.year || !addForm.count) {
+    if (!addForm.year || !addForm.female || !addForm.male) {
       alert('Please fill all fields');
       return;
     }
 
     try {
-      const occupation = addForm.mode === 'new' ? addForm.newOccupation : addForm.occupation;
-      await addRecord(occupation, parseInt(addForm.year), parseInt(addForm.count));
-      setAddForm({ mode: 'existing', occupation: '', newOccupation: '', year: '', count: '' });
+      await addRecord(parseInt(addForm.year), parseInt(addForm.female), parseInt(addForm.male));
+      setAddForm({ year: '', female: '', male: '' });
       setShowAddForm(false);
     } catch (error) {
       console.error('Error adding record:', error);
@@ -171,7 +120,7 @@ const OccupationTable = ({ userRole }) => {
     return (
       <div className="data-table__loading">
         <div className="loading-spinner"></div>
-        <p>Loading occupation data...</p>
+        <p>Loading sex data...</p>
       </div>
     );
   }
@@ -179,7 +128,7 @@ const OccupationTable = ({ userRole }) => {
   if (error) {
     return (
       <div className="data-table__error">
-        <p>Error loading occupation data: {error}</p>
+        <p>Error loading sex data: {error}</p>
         <button onClick={() => window.location.reload()} className="button button--primary">
           Retry
         </button>
@@ -191,8 +140,8 @@ const OccupationTable = ({ userRole }) => {
     <div className="data-table">
       {/* Table Summary Header */}
       <div className="table-summary-header">
-        <h3>Occupation Data</h3>
-        <p>Emigrant data by occupation categories from 1981-2020</p>
+        <h3>Sex Distribution Data</h3>
+        <p>Emigrant data by gender from 1981-2020</p>
         
         {/* Summary Statistics */}
         <div className="summary-stats">
@@ -200,7 +149,13 @@ const OccupationTable = ({ userRole }) => {
             <strong>Year Range:</strong> {stats.yearRange}
           </div>
           <div className="stat-item">
-            <strong>Total Occupations:</strong> {stats.totalOccupations}
+            <strong>Total Years:</strong> {stats.totalYears}
+          </div>
+          <div className="stat-item">
+            <strong>Total Female:</strong> {stats.totalFemale.toLocaleString()}
+          </div>
+          <div className="stat-item">
+            <strong>Total Male:</strong> {stats.totalMale.toLocaleString()}
           </div>
           <div className="stat-item">
             <strong>Total Count:</strong> {stats.totalSum.toLocaleString()}
@@ -214,7 +169,7 @@ const OccupationTable = ({ userRole }) => {
           <Search size={20} />
           <input
             type="text"
-            placeholder="Search occupations..."
+            placeholder="Search by year, female, or male count..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
@@ -249,51 +204,9 @@ const OccupationTable = ({ userRole }) => {
       {/* Add Form */}
       {showAddForm && (
         <div className="add-form">
-          <h4>Add New Occupation Record</h4>
-          
-          {/* Mode Selection */}
-          <div className="form-group">
-            <label>Add Mode:</label>
-            <div className="mode-buttons">
-              <button
-                type="button"
-                onClick={() => setAddForm({...addForm, mode: 'existing'})}
-                className={`button ${addForm.mode === 'existing' ? 'button--primary' : 'button--ghost'}`}
-              >
-                Add to Existing Occupation
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddForm({...addForm, mode: 'new'})}
-                className={`button ${addForm.mode === 'new' ? 'button--primary' : 'button--ghost'}`}
-              >
-                Create New Occupation
-              </button>
-            </div>
-          </div>
+          <h4>Add New Sex Record</h4>
 
           <div className="form-grid">
-            {addForm.mode === 'existing' ? (
-              <select
-                value={addForm.occupation}
-                onChange={(e) => setAddForm({...addForm, occupation: e.target.value})}
-                className="form-input"
-              >
-                <option value="">Select Occupation</option>
-                {occupations.map(occupation => (
-                  <option key={occupation} value={occupation}>{occupation}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                placeholder="Enter new occupation name..."
-                value={addForm.newOccupation}
-                onChange={(e) => setAddForm({...addForm, newOccupation: e.target.value})}
-                className="form-input"
-              />
-            )}
-            
             <input
               type="number"
               placeholder="Year"
@@ -306,9 +219,18 @@ const OccupationTable = ({ userRole }) => {
             
             <input
               type="number"
-              placeholder="Count"
-              value={addForm.count}
-              onChange={(e) => setAddForm({...addForm, count: e.target.value})}
+              placeholder="Female Count"
+              value={addForm.female}
+              onChange={(e) => setAddForm({...addForm, female: e.target.value})}
+              className="form-input"
+              min="0"
+            />
+            
+            <input
+              type="number"
+              placeholder="Male Count"
+              value={addForm.male}
+              onChange={(e) => setAddForm({...addForm, male: e.target.value})}
               className="form-input"
               min="0"
             />
@@ -330,17 +252,9 @@ const OccupationTable = ({ userRole }) => {
       {/* Edit Form */}
       {editingRow && (
         <div className="add-form">
-          <h4>Edit Occupation Record</h4>
+          <h4>Edit Sex Record</h4>
           
           <div className="form-grid">
-            <input
-              type="text"
-              value={editForm.occupation}
-              disabled
-              className="form-input"
-              style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
-            />
-            
             <input
               type="number"
               value={editForm.year}
@@ -351,11 +265,20 @@ const OccupationTable = ({ userRole }) => {
             
             <input
               type="number"
-              value={editForm.count}
-              onChange={(e) => setEditForm({...editForm, count: parseInt(e.target.value)})}
+              value={editForm.female}
+              onChange={(e) => setEditForm({...editForm, female: parseInt(e.target.value)})}
               className="form-input"
               min="0"
-              placeholder="Count"
+              placeholder="Female Count"
+            />
+            
+            <input
+              type="number"
+              value={editForm.male}
+              onChange={(e) => setEditForm({...editForm, male: parseInt(e.target.value)})}
+              className="form-input"
+              min="0"
+              placeholder="Male Count"
             />
           </div>
           
@@ -377,30 +300,35 @@ const OccupationTable = ({ userRole }) => {
         <table className="data-table__table">
           <thead>
             <tr>
-              <th>Occupation</th>
-              <th>Count</th>
+              <th>Year</th>
+              <th>Female</th>
+              <th>Male</th>
+              <th>Total</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {paginatedData.map((record) => (
-              <tr key={record.occupation}>
-                <td>{record.occupation}</td>
-                <td>{record.count.toLocaleString()}</td>
+              <tr key={record.year}>
+                <td>{record.year}</td>
+                <td>{record.female.toLocaleString()}</td>
+                <td>{record.male.toLocaleString()}</td>
+                <td>{record.total.toLocaleString()}</td>
                 <td>
                   <div className="action-buttons">
                     <button
                       onClick={() => handleEdit(record)}
                       className="button button--sm button--primary"
-                      disabled={selectedYear === 'all'}
-                      title={selectedYear === 'all' ? 'Select a specific year to edit' : 'Edit record'}
+                      disabled={!isPrivileged}
+                      title={!isPrivileged ? 'Insufficient permissions' : 'Edit record'}
                     >
                       <Edit2 size={14} />
                     </button>
                     <button
-                      onClick={() => handleDelete(record.occupation)}
+                      onClick={() => handleDelete(record.year)}
                       className="button button--sm button--danger"
-                      title={selectedYear === 'all' ? 'Delete all years' : `Delete year ${selectedYear}`}
+                      disabled={!isPrivileged}
+                      title={!isPrivileged ? 'Insufficient permissions' : 'Delete record'}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -413,7 +341,7 @@ const OccupationTable = ({ userRole }) => {
         
         {paginatedData.length === 0 && (
           <div className="no-data">
-            No occupation data found for the selected criteria.
+            No sex data found for the selected criteria.
           </div>
         )}
       </div>
@@ -448,4 +376,4 @@ const OccupationTable = ({ userRole }) => {
   );
 };
 
-export default OccupationTable;
+export default SexTable;
