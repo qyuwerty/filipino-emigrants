@@ -5,9 +5,19 @@ import CsvUploader from "./components/CsvUploader";
 import DynamicChart from "./components/DynamicChart";
 import DynamicMap from "./components/DynamicMap";
 import StatusCombinedChart from "./components/StatusCombinedChart";
+import { useAgeData } from './hooks/useAgeData';
+import { useCountriesData } from './hooks/useCountriesData';
+import { useMajorCountriesData } from './hooks/useMajorCountriesData';
+import { useOccupationData } from './hooks/useOccupationData';
+import { useDatasetData } from './hooks/useDatasetData';
+import AgeDataTable from "./components/AgeDataTable";
+import AllCountriesTable from "./components/AllCountriesTable";
+import MajorCountriesTable from "./components/MajorCountriesTable";
+import OccupationTable from "./components/OccupationTable";
 import DataTable from "./components/DataTable";
 import ForecastPanel from "./components/ForecastPanel"; 
-import ForecastModal from "./components/ForecastModal";
+import TabNavigation from "./components/TabNavigation";
+import DatasetNavigation from "./components/DatasetNavigation";
 import useDynamicSchema from "./hooks/useDynamicSchema";
 import ExportPanel from "./components/ExportPanel";
 import { cleanData, DEFAULT_PREPARATION_OPTIONS } from "./utils/dataPreparation";
@@ -62,11 +72,25 @@ const App = () => {
   const [minYear, setMinYear] = useState(null);
   const [maxYear, setMaxYear] = useState(null);
   const [showExportPanel, setShowExportPanel] = useState(false);
-  const [forecasts, setForecasts] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeDataset, setActiveDataset] = useState('age');
   const fileInputRef = useRef(null);
   
   // ========== DATA HOOK ==========
   const { data, schema, types, loading, error, setData, datasetName } = useDynamicSchema(csvData, activeCollection);
+  
+  // ========== DATASET HOOKS ==========
+  const ageData = useAgeData();
+  const countriesData = useCountriesData();
+  const majorCountriesData = useMajorCountriesData();
+  const occupationData = useOccupationData();
+  const allCountriesData = useDatasetData('all-countries');
+  const majorCountriesDataOld = useDatasetData('major-countries');
+  const occupationDataOld = useDatasetData('occupation');
+  const sexData = useDatasetData('sex');
+  const civilStatusData = useDatasetData('civil-status');
+  const educationData = useDatasetData('education');
+  const placeOfOriginData = useDatasetData('place-of-origin');
   
   // ========== USER STATE ==========
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -505,137 +529,305 @@ const App = () => {
           </section>
         ) : (
           <>
-            <section className="section-block section-block--hero">
-              <div className="section-header">
-                <div>
-                  <span className="section-kicker">Live Dashboard</span>
-                  <h1 className="section-title">Filipino Emigrants Dashboard</h1>
-                  <p className="section-description">
-                    Tracking {stats.total.toLocaleString()} records across {stats.columns} columns for {greetingName}.
-                  </p>
+            {/* Tab Navigation */}
+            <TabNavigation 
+              activeTab={activeTab} 
+              setActiveTab={setActiveTab} 
+              userRole={userRole}
+              hasData={hasData}
+            />
+
+            {/* Dashboard Tab Content */}
+            {activeTab === 'dashboard' && (
+              <section className="section-block section-block--hero tab-content">
+                <div className="section-header">
+                  <div>
+                    <span className="section-kicker">Live Dashboard</span>
+                    <h1 className="section-title">Filipino Emigrants Dashboard</h1>
+                    <p className="section-description">
+                      Tracking {stats.total.toLocaleString()} records across {stats.columns} columns for {greetingName}.
+                    </p>
+                  </div>
+                  <div className="section-toolbar">
+                    <span className={roleChipClass}>{roleLabel}</span>
+                    {hasData && isPrivileged && (
+                      <>
+                        <button
+                          className="button button--subtle"
+                          onClick={() => setIsForecastOpen(true)}
+                        >
+                          <Brain size={18} />
+                          Train ML Model
+                        </button>
+                        <button
+                          className="button button--ghost"
+                          onClick={() => setShowExportPanel(true)}
+                        >
+                          <Download size={18} />
+                          Export Data
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="button button--ghost"
+                      onClick={handleLogout}
+                      title={`Logout ${userEmail} (${userRole})`}
+                    >
+                      <LogOut size={18} />
+                      Logout
+                    </button>
+                  </div>
                 </div>
-                <div className="section-toolbar">
-                  <span className={roleChipClass}>{roleLabel}</span>
-                  {hasData && isPrivileged && (
-                    <>
+
+                <div className="stat-grid">
+                  <div className="stat-card">
+                    <span className="stat-card__label">Total records</span>
+                    <span className="stat-card__value">{stats.total.toLocaleString()}</span>
+                    <p className="stat-card__meta">All ingested emigrant entries currently available.</p>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-card__label">Schema columns</span>
+                    <span className="stat-card__value">{stats.columns}</span>
+                    <p className="stat-card__meta">Dynamic fields detected from the latest CSV uploads.</p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Data Management Tab Content */}
+            {activeTab === 'data-management' && (
+              <div className="tab-content">
+                <section className="section-block tab-section">
+                  <div className="section-header">
+                    <div>
+                      <span className="section-kicker">Data Management</span>
+                      <h2 className="section-title">Filipino Emigrants Data</h2>
+                      <p className="section-description">
+                        Browse and manage emigrant data from 1981-2020 across various demographic categories.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Dataset Sub-Navigation */}
+                  <DatasetNavigation 
+                    activeDataset={activeDataset} 
+                    setActiveDataset={setActiveDataset} 
+                  />
+
+                  {/* Dataset Content Based on Active Selection */}
+                  {activeDataset === 'age' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">Age Distribution</h3>
+                          <p className="section-description">
+                            Emigrant data by age groups from 1981-2020
+                          </p>
+                        </div>
+                      </div>
+                      <AgeDataTable
+                        data={ageData.data}
+                        loading={ageData.loading}
+                        error={ageData.error}
+                        userRole={userRole}
+                        onAdd={ageData.addRecord}
+                        onUpdate={ageData.updateRecord}
+                        onDelete={ageData.removeRecord}
+                      />
+                    </div>
+                  )}
+
+                  {activeDataset === 'all-countries' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">All Countries</h3>
+                          <p className="section-description">
+                            Complete emigrant data across all destination countries
+                          </p>
+                        </div>
+                        <span className="role-chip">Emigrant-1981-2020-AllCountries.csv</span>
+                      </div>
+                      <AllCountriesTable
+                        data={countriesData.data}
+                        loading={countriesData.loading}
+                        error={countriesData.error}
+                        userRole={userRole}
+                        onAdd={countriesData.addRecord}
+                        onUpdate={countriesData.updateRecord}
+                        onDelete={countriesData.deleteRecord}
+                      />
+                    </div>
+                  )}
+
+                  {activeDataset === 'major-countries' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">Major Countries</h3>
+                          <p className="section-description">
+                            Emigrant data for major destination countries
+                          </p>
+                        </div>
+                        <span className="role-chip">Emigrant-1981-2020-MajorCountry.csv</span>
+                      </div>
+                      <MajorCountriesTable
+                        data={majorCountriesData.data}
+                        loading={majorCountriesData.loading}
+                        error={majorCountriesData.error}
+                        userRole={userRole}
+                        onAdd={majorCountriesData.addRecord}
+                        onUpdate={majorCountriesData.updateRecord}
+                        onDelete={majorCountriesData.deleteRecord}
+                      />
+                    </div>
+                  )}
+
+                  {activeDataset === 'occupation' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">Occupation</h3>
+                          <p className="section-description">
+                            Emigrant data by occupation categories
+                          </p>
+                        </div>
+                        <span className="role-chip">Emigrant-1981-2020-Occu.csv</span>
+                      </div>
+                      <OccupationTable />
+                    </div>
+                  )}
+
+                  {activeDataset === 'sex' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">Sex Distribution</h3>
+                          <p className="section-description">
+                            Emigrant data by gender from 1981-2020
+                          </p>
+                        </div>
+                        <span className="role-chip">Emigrant-1981-2020-Sex.csv</span>
+                      </div>
+                      <DataTable
+                        data={sexData.data}
+                        setData={sexData.setData}
+                        schema={schema}
+                        types={types}
+                        userRole={userRole}
+                        loading={sexData.loading}
+                        error={sexData.error}
+                      />
+                    </div>
+                  )}
+
+                  {activeDataset === 'civil-status' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">Civil Status</h3>
+                          <p className="section-description">
+                            Emigrant data by marital status from 1988-2020
+                          </p>
+                        </div>
+                        <span className="role-chip">Emigrant-1988-2020-CivilStatus.csv</span>
+                      </div>
+                      <DataTable
+                        data={civilStatusData.data}
+                        setData={civilStatusData.setData}
+                        schema={schema}
+                        types={types}
+                        userRole={userRole}
+                        loading={civilStatusData.loading}
+                        error={civilStatusData.error}
+                      />
+                    </div>
+                  )}
+
+                  {activeDataset === 'education' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">Education</h3>
+                          <p className="section-description">
+                            Emigrant data by educational attainment from 1988-2020
+                          </p>
+                        </div>
+                        <span className="role-chip">Emigrant-1988-2020-Educ.csv</span>
+                      </div>
+                      <DataTable
+                        data={educationData.data}
+                        setData={educationData.setData}
+                        schema={schema}
+                        types={types}
+                        userRole={userRole}
+                        loading={educationData.loading}
+                        error={educationData.error}
+                      />
+                    </div>
+                  )}
+
+                  {activeDataset === 'place-of-origin' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">Place of Origin</h3>
+                          <p className="section-description">
+                            Emigrant data by geographic origin from 1988-2020
+                          </p>
+                        </div>
+                        <span className="role-chip">Emigrant-1988-2020-PlaceOfOrigin.csv</span>
+                      </div>
+                      <DataTable
+                        data={placeOfOriginData.data}
+                        setData={placeOfOriginData.setData}
+                        schema={schema}
+                        types={types}
+                        userRole={userRole}
+                        loading={placeOfOriginData.loading}
+                        error={placeOfOriginData.error}
+                      />
+                    </div>
+                  )}
+
+                </section>
+              </div>
+            )}
+
+            {/* AI Model Tab Content */}
+            {activeTab === 'ai-model' && isPrivileged && (
+              <div className="tab-content">
+                <section className="section-block tab-section">
+                  <div className="section-header">
+                    <div>
+                      <span className="section-kicker">AI & Analytics</span>
+                      <h2 className="section-title">Machine Learning Models</h2>
+                      <p className="section-description">
+                        Train predictive models and generate forecasts for emigration trends.
+                      </p>
+                    </div>
+                    <div className="section-toolbar">
                       <button
-                        className="button button--subtle"
+                        className="button button--primary"
                         onClick={() => setIsForecastOpen(true)}
                       >
                         <Brain size={18} />
                         Train ML Model
                       </button>
-                      <button
-                        className="button button--ghost"
-                        onClick={() => setShowExportPanel(true)}
-                      >
-                        <Download size={18} />
-                        Export Data
-                      </button>
-                    </>
-                  )}
-                  <button
-                    className="button button--ghost"
-                    onClick={handleLogout}
-                    title={`Logout ${userEmail} (${userRole})`}
-                  >
-                    <LogOut size={18} />
-                    Logout
-                  </button>
+                    </div>
                 </div>
-              </div>
 
-              <div className="stat-grid">
-                <div className="stat-card">
-                  <span className="stat-card__label">Total records</span>
-                  <span className="stat-card__value">{stats.total.toLocaleString()}</span>
-                  <p className="stat-card__meta">All ingested emigrant entries currently available.</p>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-card__label">Schema columns</span>
-                  <span className="stat-card__value">{stats.columns}</span>
-                  <p className="stat-card__meta">Dynamic fields detected from the latest CSV uploads.</p>
-                </div>
-              </div>
-            </section>
-
-            <section className="section-block">
-              <div className="section-header">
-                <div>
-                  <span className="section-kicker">Data Intake</span>
-                  <h2 className="section-title">CSV Data Upload</h2>
-                  <p className="section-description">
-                    Refresh the dataset by importing a CSV file that contains a four-digit year column and related metrics.
-                  </p>
-                </div>
-              </div>
-
-              <CsvUploader
-                onCsvData={handleCsvUpload}
-                onClearData={handleClearData}
-                userRole={userRole}
-                isAuthenticated={isAuthenticated}
-              />
-
-              {uploadStatus === 'uploading' && (
                 <div className="info-banner info-banner--progress">
-                  <Loader2 className="animate-spin" size={20} />
+                  <Brain size={20} />
                   <div>
-                    <strong>Uploading your data…</strong>
-                    <div>Please wait while we process your file.</div>
+                    <strong>AI Model Training</strong>
+                    <div>Click "Train ML Model" to start building predictive models from your data.</div>
                   </div>
                 </div>
-              )}
-              {uploadStatus === 'success' && (
-                <div className="info-banner info-banner--success">
-                  <CheckCircle2 size={20} />
-                  <div>
-                    <strong>Upload successful</strong>
-                    <div>Your data is now available in the dashboard.</div>
-                  </div>
-                </div>
-              )}
-              {uploadStatus === 'error' && (
-                <div className="info-banner info-banner--error">
-                  <AlertCircle size={20} />
-                  <div>
-                    <strong>Upload failed</strong>
-                    <div>Please check your file and try again.</div>
-                  </div>
-                </div>
-              )}
-            </section>
+              </section>
+            </div>
+            )}
 
-            <section className="section-block">
-              <div className="section-header">
-                <div>
-                  <span className="section-kicker">Records</span>
-                  <h2 className="section-title">Data Table</h2>
-                  <p className="section-description">
-                    Review, edit, add, or delete records directly from the structured table below.
-                  </p>
-                </div>
-              </div>
-
-              {validationSummary && (
-                <div className="info-banner info-banner--warning" style={{ marginBottom: '1rem' }}>
-                  <AlertCircle size={20} />
-                  <div>
-                    <strong>Validation flagged {validationSummary.totalIssues} issues across {validationSummary.affectedRows} rows.</strong>
-                    <div>Non-numeric or missing values are normalized to 0 for visualization until corrected.</div>
-                  </div>
-                </div>
-              )}
-
-              <DataTable
-                data={preparedData}
-                setData={setData}
-                schema={schema}
-                types={types}
-                userRole={userRole}
-                datasetName={activeCollection}
-              />
-            </section>
           </>
         )}
 
@@ -660,168 +852,6 @@ const App = () => {
           </section>
         )}
 
-        {!loading && hasData && (
-          <section className="section-block">
-            <div className="section-header">
-              <div>
-                <span className="section-kicker">Insights</span>
-                <h2 className="section-title">Charts &amp; Visualizations</h2>
-                <p className="section-description">
-                  Use filters and charts to explore how emigration trends change across years and categories.
-                </p>
-              </div>
-            </div>
-
-            <div className="section-stack">
-              {yearRange.min !== null && yearRange.max !== null && (
-                <div className="muted-slab muted-slab--soft">
-                  <h3 className="section-title--sm">Filter by Year Range</h3>
-                  <p className="section-description">
-                    Narrow down records between {yearRange.min} and {yearRange.max}.
-                  </p>
-                  <div className="year-range-grid">
-                    <div className="muted-slab">
-                      <label className="stat-card__label" style={{ letterSpacing: '0.08em' }}>From Year</label>
-
-                      <input
-                        type="number"
-                        min={yearRange.min}
-                        max={yearRange.max}
-                        value={minYear !== null ? minYear : ''}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          const numValue = value === '' ? null : Number(value);
-
-                          if (numValue !== null) {
-                            if (numValue < yearRange.min) {
-                              setMinYear(yearRange.min);
-                            } else if (numValue > yearRange.max) {
-                              setMinYear(yearRange.max);
-                            } else if (maxYear !== null && numValue > maxYear) {
-                              setMinYear(numValue);
-                              setMaxYear(numValue);
-                            } else {
-                              setMinYear(numValue);
-                            }
-                          } else {
-                            setMinYear(null);
-                          }
-                        }}
-                        placeholder={`Start from ${yearRange.min}`}
-                        className="input-field"
-                        style={{ color: 'black', caretColor: 'black' }}
-                      />
-                    </div>
-                    <div className="muted-slab">
-                      <label className="stat-card__label" style={{ letterSpacing: '0.08em' }}>To Year</label>
-
-                      <input
-                        type="number"
-                        min={yearRange.min}
-                        max={yearRange.max}
-                        value={maxYear !== null ? maxYear : ''}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          const numValue = value === '' ? null : Number(value);
-
-                          if (numValue !== null) {
-                            if (numValue < yearRange.min) {
-                              setMaxYear(yearRange.min);
-                            } else if (numValue > yearRange.max) {
-                              setMaxYear(yearRange.max);
-                            } else if (minYear !== null && numValue < minYear) {
-                              setMaxYear(numValue);
-                              setMinYear(numValue);
-                            } else {
-                              setMaxYear(numValue);
-                            }
-                          } else {
-                            setMaxYear(null);
-                          }
-                        }}
-                        placeholder={`End at ${yearRange.max}`}
-                        className="input-field"
-                        style={{ color: 'black', caretColor: 'black' }}
-                      />
-                    </div>
-                  </div>
-                  <div className="section-toolbar" style={{ marginTop: '0.75rem' }}>
-                    <span className="stat-card__meta">
-                      Showing {filteredData.length} of {preparedData.length} records.
-                    </span>
-                    {(minYear !== null || maxYear !== null) && (
-                      <button
-                        className="button button--ghost"
-                        onClick={() => {
-                          setMinYear(null);
-                          setMaxYear(null);
-                        }}
-                      >
-                        Clear filter
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {statusColumns.length > 0 && (
-                <div className="muted-slab muted-slab--soft">
-                  <div className="section-header" style={{ padding: 0 }}>
-                    <div>
-                      <h3 className="section-title--sm">Status Breakdown</h3>
-                      <p className="section-description">
-                        Combined view of all marital status categories by year.
-                      </p>
-                    </div>
-                    <span className="role-chip">Combined View</span>
-                  </div>
-                  <StatusCombinedChart
-                    data={filteredData}
-                    statusColumns={statusColumns}
-                    types={types}
-                  />
-                </div>
-              )}
-
-              <div className="chart-grid">
-                {regularColumns
-                  .filter((variable) => {
-                    const lowerVar = variable.toLowerCase();
-                    const isYearColumn =
-                      lowerVar.includes('year') || lowerVar.includes('date');
-                    const isStatusColumn = statusColumns
-                      ? statusColumns.includes(variable)
-                      : false;
-                    return !isYearColumn && !isStatusColumn;
-                  })
-                  .map((variable) => (
-                    <div key={variable} className="muted-slab muted-slab--soft">
-                      <div className="section-header" style={{ padding: 0 }}>
-                        <div>
-                          <h3 className="section-title--sm">{variable}</h3>
-                          <p className="section-description" style={{ marginTop: '0.25rem' }}>
-                            Data type: {types[variable] || 'unknown'}
-                          </p>
-                        </div>
-                        <span className="role-chip" style={{ fontSize: '0.7rem' }}>
-                          {types[variable] || 'unknown'}
-                        </span>
-                      </div>
-
-                      {(variable.toLowerCase().includes('origin') ||
-                        variable.toLowerCase().includes('destination') ||
-                        variable.toLowerCase().includes('place')) ? (
-                        <DynamicMap data={filteredData} variable={variable} />
-                      ) : (
-                        <DynamicChart data={filteredData} variable={variable} types={types} />
-                      )}
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </section>
-        )}
-
         {!loading && !hasData && (
           <section className="section-block section-block--muted">
             <div className="empty-state">
@@ -838,16 +868,6 @@ const App = () => {
           </section>
         )}
       </div>
-
-      <ForecastModal
-        open={isForecastOpen}
-        onClose={() => setIsForecastOpen(false)}
-      >
-        <ForecastPanel
-          data={filteredData}
-          onForecastUpdate={setForecasts}
-        />
-      </ForecastModal>
 
       {showExportPanel && (
         <ExportPanel
@@ -872,6 +892,6 @@ const App = () => {
       )}
     </div>
   );
-}
+};
 
 export default App;
