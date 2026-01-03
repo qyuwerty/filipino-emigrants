@@ -1,0 +1,73 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Metro Manila",
+        "region": "NCR"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [120.9, 14.5],
+          [121.1, 14.5],
+          [121.1, 14.8],
+          [120.9, 14.8],
+          [120.9, 14.5]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Luzon",
+        "region": "Luzon"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [120.0, 14.0],
+          [122.0, 14.0],
+          [122.0, 18.0],
+          [120.0, 18.0],
+          [120.0, 14.0]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Visayas",
+        "region": "Visayas"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [122.0, 10.0],
+          [125.0, 10.0],
+          [125.0, 13.0],
+          [122.0, 13.0],
+          [122.0, 10.0]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mindanao",
+        "region": "Mindanao"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [122.0, 5.0],
+          [126.0, 5.0],
+          [126.0, 9.0],
+          [122.0, 9.0],
+          [122.0, 5.0]
+        ]]
+      }
+    }
+  ]
+}
