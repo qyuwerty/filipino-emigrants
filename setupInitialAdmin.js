@@ -4,12 +4,12 @@ import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyArIZOZbkYA5t0lE2ED941TE7skog1sU_Y",
-  authDomain: "zythprjec123.firebaseapp.com",
-  projectId: "zythprjec123",
-  storageBucket: "zythprjec123.firebasestorage.app",
-  messagingSenderId: "1001508506684",
-  appId: "1:1001508506684:web:fcd4b967a719d289c4c739"
+  apiKey: "AIzaSyBMfKnlIKyMD9I5kb9QS6wtsz_Nh4bSJFo",
+  authDomain: "filipinoemigrantsdb-c8aa5.firebaseapp.com",
+  projectId: "filipinoemigrantsdb-c8aa5",
+  storageBucket: "filipinoemigrantsdb-c8aa5.firebasestorage.app",
+  messagingSenderId: "230361129580",
+  appId: "1:230361129580:web:e6e7bcfd10938a48acae49"
 };
 
 const app = initializeApp(firebaseConfig);

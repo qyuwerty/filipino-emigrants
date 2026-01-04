@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Users, Globe, MapPin, Briefcase, UserCheck, Heart, GraduationCap, Home 
+  Users, Globe, MapPin, Briefcase, UserCheck, Heart, GraduationCap, Home, Calendar 
 } from 'lucide-react';
 
 const DatasetNavigation = ({ activeDataset, setActiveDataset }) => {
@@ -52,6 +52,12 @@ const DatasetNavigation = ({ activeDataset, setActiveDataset }) => {
       label: 'Place of Origin',
       icon: Home,
       description: 'Geographic origins'
+    },
+    {
+      id: 'yearly-data',
+      label: 'Yearly Data',
+      icon: Calendar,
+      description: 'Yearly emigration totals'
     }
   ];
 

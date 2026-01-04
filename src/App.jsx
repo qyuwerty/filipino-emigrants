@@ -13,6 +13,7 @@ import { useSexData } from './hooks/useSexData';
 import { useCivilStatusData } from './hooks/useCivilStatusData';
 import { useEducationData } from './hooks/useEducationData';
 import { usePlaceOfOriginData } from './hooks/usePlaceOfOriginData';
+import { useYearlyData } from './hooks/useYearlyData';
 import { useDatasetData } from './hooks/useDatasetData';
 import AgeDataTable from "./components/AgeDataTable";
 import AllCountriesTable from "./components/AllCountriesTable";
@@ -22,6 +23,13 @@ import SexTable from "./components/SexTable";
 import CivilStatusTable from "./components/CivilStatusTable";
 import EducationTable from "./components/EducationTable";
 import PlaceOfOriginTable from "./components/PlaceOfOriginTable";
+import YearlyDataTable from "./components/YearlyDataTable";
+import AgeVisualization from "./components/AgeVisualization";
+import SexOccupationRelationship from "./components/SexOccupationRelationship";
+import CivilStatusComposition from "./components/CivilStatusComposition";
+import MajorCountriesComparison from "./components/MajorCountriesComparison";
+import AllCountriesPanel from "./components/AllCountriesPanel";
+import PlaceOfOriginPanel from "./components/PlaceOfOriginPanel";
 import DataTable from "./components/DataTable";
 import ForecastPanel from "./components/ForecastPanel"; 
 import TabNavigation from "./components/TabNavigation";
@@ -93,6 +101,7 @@ const App = () => {
   const civilStatusDataNew = useCivilStatusData();
   const educationDataNew = useEducationData();
   const placeOfOriginDataNew = usePlaceOfOriginData();
+  const yearlyDataNew = useYearlyData();
   const allCountriesData = useDatasetData('all-countries');
   const majorCountriesDataOld = useDatasetData('major-countries');
   const occupationDataOld = useDatasetData('occupation');
@@ -371,161 +380,27 @@ const App = () => {
   return (
     <div className="dashboard-shell">
       <div className="dashboard-grid">
-        {!loading && !hasData ? (
-          <section className="section-block section-block--hero">
-            <div className="section-header">
-              <div>
-                <span className="section-kicker">Dashboard Overview</span>
-                <h1 className="section-title">Welcome back, {greetingName}.</h1>
-                <p className="section-description">
-                  {userRole === 'super-admin'
-                    ? 'You have full access to manage datasets, train models, and configure the platform.'
-                    : userRole === 'admin'
-                    ? 'Upload CSV data, manage records, and keep insights fresh for your team.'
-                    : 'Browse the latest emigration insights and export what you need.'}
-                </p>
-              </div>
-              <div className="section-toolbar">
-                <span className={roleChipClass}>{roleLabel}</span>
-                <button
-                  className="button button--ghost"
-                  onClick={() => {
-                    if (window.confirm('Are you sure you want to logout?')) {
-                      handleLogout();
-                    }
-                  }}
-                >
-                  <LogOut size={18} />
-                  Logout
-                </button>
-              </div>
-            </div>
-
-            <div className="section-stack">
-              <div className="stat-grid">
-                <div className="stat-card">
-                  <span className="stat-card__label">First step</span>
-                  <span className="stat-card__value">
-                    {isPrivileged ? 'Upload data' : 'Stay informed'}
-                  </span>
-                  <p className="stat-card__meta">
-                    {isPrivileged
-                      ? 'Bring a CSV file with a 4-digit year column to populate the dashboard.'
-                      : 'An administrator will upload data soon—check back for insights.'}
-                  </p>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-card__label">Your access</span>
-                  <span className="stat-card__value">
-                    {roleLabel.replace('👑 ', '').replace('👤 ', '')}
-                  </span>
-                  <p className="stat-card__meta">
-                    {userRole === 'super-admin'
-                      ? 'Full system controls, including ML training and data resets.'
-                      : userRole === 'admin'
-                      ? 'Upload, edit, and manage datasets for your organization.'
-                      : 'Read-only access with export permissions.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="section-toolbar">
-                {isPrivileged ? (
-                  <button
-                    className="button button--primary"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload size={16} />
-                    Import CSV Data
-                  </button>
-                ) : (
-                  <button
-                    className="button button--ghost"
-                    onClick={() =>
-                      alert('Please contact an administrator for CSV upload permissions.')
-                    }
-                  >
-                    <Lock size={16} />
-                    Request Upload Access
-                  </button>
-                )}
-              </div>
-
-              {isPrivileged && (
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      import('papaparse').then((Papa) => {
-                        Papa.default.parse(file, {
-                          header: true,
-                          skipEmptyLines: true,
-                          dynamicTyping: false,
-                          complete: (results) => {
-                            if (results.data && results.data.length > 0) {
-                              handleCsvUpload(results.data);
-                            }
-                          },
-                          error: (uploadError) => {
-                            console.error('CSV parsing error:', uploadError);
-                            setUploadStatus('error');
-                            setTimeout(() => setUploadStatus(null), 5000);
-                          }
-                        });
-                      });
-                      e.target.value = '';
-                    }
-                  }}
-                  className="hidden"
-                  style={{ display: 'none' }}
-                />
-              )}
-            </div>
-          </section>
-        ) : (
-          <>
-            {/* Tab Navigation */}
-            <TabNavigation 
-              activeTab={activeTab} 
-              setActiveTab={setActiveTab} 
-              userRole={userRole}
-              hasData={hasData}
-            />
+        {/* Tab Navigation */}
+        <TabNavigation 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          userRole={userRole}
+          hasData={hasData}
+        />
 
             {/* Dashboard Tab Content */}
             {activeTab === 'dashboard' && (
-              <section className="section-block section-block--hero tab-content">
+              <div className="tab-content">
                 <div className="section-header">
                   <div>
-                    <span className="section-kicker">Live Dashboard</span>
+                    <span className="section-kicker">Dashboard</span>
                     <h1 className="section-title">Filipino Emigrants Dashboard</h1>
                     <p className="section-description">
-                      Tracking {stats.total.toLocaleString()} records across {stats.columns} columns for {greetingName}.
+                      Welcome back, {greetingName}.
                     </p>
                   </div>
                   <div className="section-toolbar">
                     <span className={roleChipClass}>{roleLabel}</span>
-                    {hasData && isPrivileged && (
-                      <>
-                        <button
-                          className="button button--subtle"
-                          onClick={() => setIsForecastOpen(true)}
-                        >
-                          <Brain size={18} />
-                          Train ML Model
-                        </button>
-                        <button
-                          className="button button--ghost"
-                          onClick={() => setShowExportPanel(true)}
-                        >
-                          <Download size={18} />
-                          Export Data
-                        </button>
-                      </>
-                    )}
                     <button
                       className="button button--ghost"
                       onClick={handleLogout}
@@ -537,19 +412,90 @@ const App = () => {
                   </div>
                 </div>
 
-                <div className="stat-grid">
-                  <div className="stat-card">
-                    <span className="stat-card__label">Total records</span>
-                    <span className="stat-card__value">{stats.total.toLocaleString()}</span>
-                    <p className="stat-card__meta">All ingested emigrant entries currently available.</p>
+                {/* Age Visualization Panel */}
+                <section className="section-block tab-section">
+                  <div className="section-header">
+                    <div>
+                      <span className="section-kicker">Analytics</span>
+                      <h2 className="section-title">Age Distribution Analysis</h2>
+                      <p className="section-description">
+                        Interactive visualization of emigrant age groups with year filtering.
+                      </p>
+                    </div>
                   </div>
-                  <div className="stat-card">
-                    <span className="stat-card__label">Schema columns</span>
-                    <span className="stat-card__value">{stats.columns}</span>
-                    <p className="stat-card__meta">Dynamic fields detected from the latest CSV uploads.</p>
+                  <AgeVisualization userRole={userRole} />
+                </section>
+
+                {/* Sex vs Occupation Relationship Panel */}
+                <section className="section-block tab-section">
+                  <div className="section-header">
+                    <div>
+                      <span className="section-kicker">Relationship Analysis</span>
+                      <h2 className="section-title">Sex vs Occupation Analysis</h2>
+                      <p className="section-description">
+                        Explore the relationship between gender and occupation types among Filipino emigrants.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </section>
+                  <SexOccupationRelationship userRole={userRole} />
+                </section>
+
+                {/* Civil Status Composition Panel */}
+                <section className="section-block tab-section">
+                  <div className="section-header">
+                    <div>
+                      <span className="section-kicker">Composition Analysis</span>
+                      <h2 className="section-title">Civil Status Composition</h2>
+                      <p className="section-description">
+                        Breakdown of civil status categories among Filipino emigrants.
+                      </p>
+                    </div>
+                  </div>
+                  <CivilStatusComposition userRole={userRole} />
+                </section>
+
+                {/* Major Countries Comparison Panel */}
+                <section className="section-block tab-section">
+                  <div className="section-header">
+                    <div>
+                      <span className="section-kicker">Country Comparison</span>
+                      <h2 className="section-title">Major Countries Comparison</h2>
+                      <p className="section-description">
+                        Compare number of emigrants across major destination countries over time.
+                      </p>
+                    </div>
+                  </div>
+                  <MajorCountriesComparison userRole={userRole} />
+                </section>
+
+                {/* All Countries Panel */}
+                <section className="section-block tab-section">
+                  <div className="section-header">
+                    <div>
+                      <span className="section-kicker">Complete Analysis</span>
+                      <h2 className="section-title">All Countries Analysis</h2>
+                      <p className="section-description">
+                        Complete overview of emigrant distribution across all destination countries.
+                      </p>
+                    </div>
+                  </div>
+                  <AllCountriesPanel userRole={userRole} />
+                </section>
+
+                {/* Place of Origin Panel */}
+                <section className="section-block tab-section">
+                  <div className="section-header">
+                    <div>
+                      <span className="section-kicker">Geographic Analysis</span>
+                      <h2 className="section-title">Place of Origin Analysis</h2>
+                      <p className="section-description">
+                        Geographic distribution of Filipino emigrants across Philippine regions.
+                      </p>
+                    </div>
+                  </div>
+                  <PlaceOfOriginPanel userRole={userRole} />
+                </section>
+              </div>
             )}
 
             {/* Data Management Tab Content */}
@@ -716,6 +662,21 @@ const App = () => {
                     </div>
                   )}
 
+                  {activeDataset === 'yearly-data' && (
+                    <div className="dataset-content">
+                      <div className="section-header" style={{ padding: 0, marginBottom: '1rem' }}>
+                        <div>
+                          <h3 className="section-title--sm">Yearly Data</h3>
+                          <p className="section-description">
+                            Yearly emigration totals from the emigrant_yearlyData collection
+                          </p>
+                        </div>
+                        <span className="role-chip">emigrant_yearlyData</span>
+                      </div>
+                      <YearlyDataTable userRole={userRole} />
+                    </div>
+                  )}
+
                 </section>
               </div>
             )}
@@ -754,9 +715,6 @@ const App = () => {
             </div>
             )}
 
-          </>
-        )}
-
         {loading && (
           <section className="section-block section-block--muted">
             <Loader2 className="animate-spin" size={48} />
@@ -774,22 +732,6 @@ const App = () => {
                 <strong>Error loading data</strong>
                 <div>{error}</div>
               </div>
-            </div>
-          </section>
-        )}
-
-        {!loading && !hasData && (
-          <section className="section-block section-block--muted">
-            <div className="empty-state">
-              <div className="empty-state__icon">
-                <FileSpreadsheet size={40} />
-              </div>
-              <h3 className="empty-state__title">No data available yet</h3>
-              <p className="empty-state__subtitle">
-                {isPrivileged
-                  ? 'Upload a CSV file to populate the dashboard with records and visualizations.'
-                  : 'No data has been uploaded yet. Please check back later or contact the administrator.'}
-              </p>
             </div>
           </section>
         )}

@@ -1665,6 +1665,105 @@ export const fetchRecordsByDataset = async (datasetType) => {
   });
 };
 
+// ========== YEARLY DATA COLLECTION SPECIFIC FUNCTIONS ==========
+
+// Fetch yearly data from emigrant_yearlyData collection
+export const fetchYearlyData = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "emigrant_yearlyData"));
+    const yearlyData = [];
+    
+    console.log('fetchYearlyData - Query snapshot size:', querySnapshot.size);
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      console.log('fetchYearlyData - Document data:', doc.id, data);
+      
+      // Parse the document - document ID is the year, data contains count
+      const year = parseInt(doc.id);
+      const count = data.count || 0;
+      
+      console.log('fetchYearlyData - Adding record:', {
+        id: doc.id,
+        year: year,
+        count: count
+      });
+      
+      yearlyData.push({
+        id: doc.id,
+        year: year,
+        count: count
+      });
+    });
+    
+    console.log('fetchYearlyData - Final data array:', yearlyData);
+    return yearlyData.sort((a, b) => a.year - b.year);
+  } catch (error) {
+    console.error("Error fetching yearly data:", error);
+    throw error;
+  }
+};
+
+// Add yearly data for a specific year
+export const addYearlyData = async (year, count) => {
+  try {
+    const docRef = doc(db, "emigrant_yearlyData", year.toString());
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      throw new Error(`Yearly data for year ${year} already exists`);
+    }
+    
+    await setDoc(docRef, { count: parseInt(count) });
+    
+    console.log(`Successfully added yearly data for year ${year}`);
+    return { year: parseInt(year), count: parseInt(count) };
+  } catch (error) {
+    console.error("Error adding yearly data:", error);
+    throw error;
+  }
+};
+
+// Update yearly data for a specific year
+export const updateYearlyData = async (year, count) => {
+  try {
+    const docRef = doc(db, "emigrant_yearlyData", year.toString());
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Yearly data for year ${year} not found`);
+    }
+    
+    await updateDoc(docRef, { count: parseInt(count) });
+    
+    console.log(`Successfully updated yearly data for year ${year}`);
+    return { year: parseInt(year), count: parseInt(count) };
+  } catch (error) {
+    console.error("Error updating yearly data:", error);
+    throw error;
+  }
+};
+
+// Delete yearly data for a specific year
+export const deleteYearlyData = async (year) => {
+  try {
+    const docRef = doc(db, "emigrant_yearlyData", year.toString());
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error(`Yearly data for year ${year} not found`);
+    }
+    
+    await deleteDoc(docRef);
+    
+    console.log(`Successfully deleted yearly data for year ${year}`);
+    return { year: parseInt(year), deleted: true };
+  } catch (error) {
+    console.error("Error deleting yearly data:", error);
+    throw error;
+  }
+};
+
 // ========== ORIGINAL COLLECTION FUNCTIONS ==========
 
 // Fetch data from collection

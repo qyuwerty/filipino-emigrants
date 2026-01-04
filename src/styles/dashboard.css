@@ -1,0 +1,807 @@
+/* Dashboard Visualization Styles */
+
+/* Year Filter Slider Styles */
+.year-filter-slider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.filter-label {
+  font-weight: 600;
+  color: #333;
+  min-width: 100px;
+}
+
+.slider-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.year-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #ddd;
+  border-radius: 3px;
+  outline: none;
+}
+
+.year-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.year-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.slider-label {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.slider-label:hover {
+  background-color: #e5e7eb;
+}
+
+.slider-label.active {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.slider-range {
+  color: #666;
+  font-style: italic;
+}
+
+/* Chart Container Styles */
+.chart-container {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.chart-header h4 {
+  margin: 0;
+  color: #333;
+}
+
+.chart-info {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+/* Age Group Details Styles */
+.age-group-details {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.age-group-details h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.age-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.age-group-card {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.age-group-label {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.age-group-count {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #3b82f6;
+  margin-bottom: 0.5rem;
+}
+
+.age-group-bar {
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.age-group-bar-fill {
+  height: 100%;
+  background: #3b82f6;
+  transition: width 0.3s ease;
+}
+
+/* Occupation Details Styles */
+.occupation-details {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.occupation-details h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.occupation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.occupation-card {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.occupation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.occupation-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.875rem;
+}
+
+.occupation-total {
+  font-weight: bold;
+  color: #3b82f6;
+}
+
+.gender-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gender-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gender-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  min-width: 50px;
+}
+
+.bar-container {
+  flex: 1;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.male-fill {
+  background: #3b82f6;
+}
+
+.female-fill {
+  background: #ec4899;
+}
+
+.gender-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  min-width: 60px;
+  text-align: right;
+}
+
+/* Civil Status Details Styles */
+.civil-status-details {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.civil-status-details h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.status-card {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.status-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.875rem;
+}
+
+.status-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+
+.status-count {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #333;
+}
+
+.status-percentage {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.status-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.status-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* Countries Details Styles */
+.countries-details {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.countries-details h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.countries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.country-card {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  position: relative;
+}
+
+.country-rank {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.rank-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 0.75rem;
+  color: white;
+  background: #6b7280;
+}
+
+.rank-number:nth-child(1) {
+  background: #10b981;
+}
+
+.rank-badge {
+  font-size: 0.625rem;
+  font-weight: bold;
+  color: white;
+  background: #10b981;
+  padding: 0.125rem 0.375rem;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.country-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+.country-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+
+.country-count {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #333;
+}
+
+.country-percentage {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.country-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.country-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* All Countries Panel Styles */
+.countries-summary {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.countries-summary h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.summary-card {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.summary-title {
+  font-size: 0.875rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.summary-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #3b82f6;
+  margin-bottom: 0.25rem;
+}
+
+.summary-detail {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.top-countries-list {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.top-countries-list h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.countries-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.country-list-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.country-list-item:hover {
+  background-color: #f9fafb;
+}
+
+.country-list-rank {
+  flex-shrink: 0;
+}
+
+.rank-number-small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 0.625rem;
+  color: white;
+  background: #6b7280;
+}
+
+.country-list-name {
+  flex: 1;
+  font-weight: 500;
+  color: #333;
+  font-size: 0.875rem;
+  min-width: 120px;
+}
+
+.country-list-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+  min-width: 100px;
+}
+
+.country-list-count {
+  font-weight: bold;
+  color: #333;
+  font-size: 0.875rem;
+}
+
+.country-list-percentage {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.country-list-bar {
+  flex: 1;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.country-list-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.more-countries {
+  text-align: center;
+  margin-top: 1rem;
+  color: #666;
+  font-style: italic;
+}
+
+.more-countries p {
+  margin: 0;
+}
+
+/* Place of Origin Panel Styles */
+.philippines-map {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.map-container {
+  position: relative;
+  width: 100%;
+  height: 500px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.philippines-svg {
+  width: 100%;
+  height: 100%;
+  max-width: 500px;
+  max-height: 500px;
+}
+
+.region-path {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.region-path:hover {
+  opacity: 0.8;
+  stroke-width: 3;
+}
+
+.region-text {
+  pointer-events: none;
+  text-shadow: 0 0 2px white, 0 0 2px white;
+}
+
+.map-legend {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: white;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  z-index: 10;
+}
+
+.legend-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.map-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.region-marker {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.region-marker:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  z-index: 5;
+}
+
+.region-dot {
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+  margin-bottom: 0.25rem;
+}
+
+.region-label {
+  text-align: center;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.1;
+}
+
+.region-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.region-count {
+  font-weight: bold;
+  color: #1f2937;
+}
+
+.regions-ranking {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.regions-ranking h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.regions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.region-list-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.region-list-item:hover {
+  background-color: #f9fafb;
+}
+
+.region-rank {
+  flex-shrink: 0;
+}
+
+.rank-number-small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 0.625rem;
+  color: white;
+  background: #3b82f6;
+}
+
+.regions-ranking .region-name {
+  flex: 1;
+  font-weight: 500;
+  color: #333;
+  font-size: 0.875rem;
+  min-width: 200px;
+}
+
+.region-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+  min-width: 100px;
+}
+
+.regions-ranking .region-count {
+  font-weight: bold;
+  color: #333;
+  font-size: 0.875rem;
+}
+
+.region-percentage {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.region-bar {
+  flex: 1;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.region-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.no-data-message {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+.no-data-message p {
+  margin: 0;
+  font-size: 1.1rem;
+}
