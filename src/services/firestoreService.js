@@ -1235,8 +1235,6 @@ export const fetchCivilStatusData = async () => {
         total: data.total || 0
       });
     });
-    
-    console.log('fetchCivilStatusData - Final data array:', civilStatusData);
     return civilStatusData.sort((a, b) => a.year - b.year);
   } catch (error) {
     console.error("Error fetching civil status data:", error);
@@ -1468,31 +1466,19 @@ export const fetchPlaceOfOriginData = async () => {
       
       // Handle the years field which contains an array of objects with value and year properties
       const yearsArray = data.years || [];
-      console.log('fetchPlaceOfOriginData - Years array for', doc.id, ':', yearsArray);
-      console.log('fetchPlaceOfOriginData - Years array type:', typeof yearsArray, 'Length:', yearsArray.length);
       
       // Parse the array of objects with value and year properties
       if (Array.isArray(yearsArray)) {
-        console.log('fetchPlaceOfOriginData - Using value/year object parsing approach');
         yearsArray.forEach((yearData, index) => {
-          console.log('fetchPlaceOfOriginData - Processing yearData', index, ':', yearData, 'Type:', typeof yearData);
           if (yearData && typeof yearData === 'object' && yearData.hasOwnProperty('year') && yearData.hasOwnProperty('value')) {
             const yearNum = parseInt(yearData.year);
             const count = parseInt(yearData.value);
-            console.log('fetchPlaceOfOriginData - Adding record:', {
-              id: `${doc.id}_${yearNum}`,
-              region: doc.id,
-              year: yearNum,
-              count: count
-            });
             placeOfOriginData.push({
               id: `${doc.id}_${yearNum}`,
               region: doc.id,
               year: yearNum,
               count: count || 0
             });
-          } else {
-            console.log('fetchPlaceOfOriginData - Skipping invalid yearData (missing value/year):', yearData);
           }
         });
       } else {
@@ -1677,7 +1663,6 @@ export const fetchYearlyData = async () => {
     
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      console.log('fetchYearlyData - Document data:', doc.id, data);
       
       // Parse the document - document ID is the year, data contains count
       const year = parseInt(doc.id);
