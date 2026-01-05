@@ -1,21 +1,26 @@
 // src/components/ForecastPanel.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Brain, Play } from 'lucide-react';
+import { X, Brain, Play, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { trainMLPModel } from '../models/mlpModels';
 import { prepareTimeSeriesData } from '../utils/dataPreparation';
+import { useCivilStatusData } from '../hooks/useCivilStatusData';
 import './ForecastPanel.css';
 
-const ForecastPanel = ({ data, isOpen, onClose }) => {
+const ForecastPanel = ({ isOpen, onClose }) => {
   const [isTraining, setIsTraining] = useState(false);
   const [trainingProgress, setTrainingProgress] = useState(0);
   
+  // Civil status data hook
+  const civilStatusData = useCivilStatusData();
+  
   const [mlpConfig, setMlpConfig] = useState({
-    lookback: 12,
+    lookback: 10, // Reduced to 10 since we have 33 years (1988-2020)
     hiddenUnits: 64,
     activation: 'relu', 
     epochs: 50,
-    forecastYears: 5
+    forecastYears: 5,
+    targetColumn: 'single' // Default to single (lowercase to match database)
   });
   const [mlpResults, setMlpResults] = useState(null);
 
@@ -32,7 +37,22 @@ const ForecastPanel = ({ data, isOpen, onClose }) => {
     setTrainingProgress(0);
     
     try {
-      const preparedData = prepareTimeSeriesData(data, mlpConfig.lookback);
+      // Validate data before proceeding
+      if (!civilStatusData.data || civilStatusData.data.length === 0) {
+        throw new Error('No civil status data available for training. Please ensure data is loaded before training the model.');
+      }
+      
+      // Debug: Log the data structure
+      console.log('Civil status data sample:', civilStatusData.data[0]);
+      console.log('Available columns:', Object.keys(civilStatusData.data[0] || {}));
+      console.log('Target column:', mlpConfig.targetColumn);
+      console.log('Target column values:', civilStatusData.data.map(row => row[mlpConfig.targetColumn]));
+      
+      const preparedData = prepareTimeSeriesData(
+        civilStatusData.data, 
+        mlpConfig.lookback, 
+        mlpConfig.targetColumn
+      );
       
       const results = await trainMLPModel(
         preparedData,
@@ -62,7 +82,7 @@ const ForecastPanel = ({ data, isOpen, onClose }) => {
                 MLP Time Series Forecasting
               </h2>
               <p className="text-sm text-gray-600">
-                Train MLP model to predict future emigration trends
+                Train MLP model to predict future civil status emigration trends (1988-2020 data)
               </p>
             </div>
           </div>
@@ -79,6 +99,9 @@ const ForecastPanel = ({ data, isOpen, onClose }) => {
             isTraining={isTraining}
             trainingProgress={trainingProgress}
             onTrain={handleMLPTrain}
+            data={civilStatusData.data}
+            loading={civilStatusData.loading}
+            error={civilStatusData.error}
           />
         </div>
       </div>
@@ -86,7 +109,7 @@ const ForecastPanel = ({ data, isOpen, onClose }) => {
   );
 };
 
-const MLPPanel = ({ config, setConfig, results, isTraining, trainingProgress, onTrain }) => {
+const MLPPanel = ({ config, setConfig, results, isTraining, trainingProgress, onTrain, data, loading, error }) => {
   // Store input values as strings to allow proper editing
   const [inputValues, setInputValues] = useState({
     lookback: String(config.lookback),
@@ -159,6 +182,23 @@ const MLPPanel = ({ config, setConfig, results, isTraining, trainingProgress, on
         
         <div className="config-grid">
           <div className="config-item">
+            <label>Civil Status to Predict</label>
+            <select
+              value={config.targetColumn}
+              onChange={(e) => setConfig({ ...config, targetColumn: e.target.value })}
+              disabled={isTraining}
+            >
+              <option value="single">Single</option>
+              <option value="married">Married</option>
+              <option value="widower">Widower</option>
+              <option value="separated">Separated</option>
+              <option value="divorced">Divorced</option>
+              <option value="notReported">Not Reported</option>
+            </select>
+            <span className="config-help">Select civil status category to predict</span>
+          </div>
+
+          <div className="config-item">
             <label>Lookback Period</label>
             <input
               ref={el => inputRefs.current.lookback = el}
@@ -167,9 +207,9 @@ const MLPPanel = ({ config, setConfig, results, isTraining, trainingProgress, on
               pattern="[0-9]*"
               value={inputValues.lookback}
               onChange={(e) => handleInputChange('lookback', e.target.value, e.target.selectionStart)}
-              onBlur={() => handleInputBlur('lookback', 3, 24)}
+              onBlur={() => handleInputBlur('lookback', 3, 20)}
               disabled={isTraining}
-              placeholder="3-24"
+              placeholder="3-20"
               autoComplete="off"
               spellCheck="false"
             />
@@ -269,9 +309,9 @@ const MLPPanel = ({ config, setConfig, results, isTraining, trainingProgress, on
               pattern="[0-9]*"
               value={inputValues.forecastYears}
               onChange={(e) => handleInputChange('forecastYears', e.target.value, e.target.selectionStart)}
-              onBlur={() => handleInputBlur('forecastYears', 1, 10)}
+              onBlur={() => handleInputBlur('forecastYears', 1, 8)}
               disabled={isTraining}
-              placeholder="1-10"
+              placeholder="1-8"
               autoComplete="off"
               spellCheck="false"
             />
@@ -282,7 +322,7 @@ const MLPPanel = ({ config, setConfig, results, isTraining, trainingProgress, on
         <button
           className={`train-btn ${isTraining ? 'training' : ''}`}
           onClick={onTrain}
-          disabled={isTraining}
+          disabled={isTraining || !data || data.length === 0}
         >
           {isTraining ? (
             <>
@@ -297,11 +337,22 @@ const MLPPanel = ({ config, setConfig, results, isTraining, trainingProgress, on
           )}
         </button>
 
+        {!data || data.length === 0 ? (
+          <div className="info-banner info-banner--error" style={{ marginTop: '1rem' }}>
+            <AlertCircle size={20} />
+            <div>
+              <strong>No Data Available</strong>
+              <div>Please ensure data is loaded before training the model. Check that data has been uploaded and is visible in the dashboard.</div>
+            </div>
+          </div>
+        ) : null}
+
         {isTraining && (
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${trainingProgress}%` }} />
           </div>
         )}
+
       </div>
 
       {results && <ResultsPanel results={results} modelType="MLP" />}
@@ -318,6 +369,11 @@ const ResultsPanel = ({ results, modelType }) => {
         <div className="metric-card">
           <span className="metric-label">Model Type</span>
           <span className="metric-value">{modelType}</span>
+        </div>
+        
+        <div className="metric-card">
+          <span className="metric-label">Target Column</span>
+          <span className="metric-value">{results.config.targetColumn}</span>
         </div>
         
         <div className="metric-card">

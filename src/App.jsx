@@ -690,7 +690,7 @@ const App = () => {
                       <span className="section-kicker">AI & Analytics</span>
                       <h2 className="section-title">Machine Learning Models</h2>
                       <p className="section-description">
-                        Train predictive models and generate forecasts for emigration trends.
+                        Train MLP models to forecast civil status emigration trends (1988-2020 data). Predict future values for Single, Married, Widower, Separated, Divorced, and Not Reported categories.
                       </p>
                     </div>
                     <div className="section-toolbar">
@@ -739,7 +739,6 @@ const App = () => {
 
       {isForecastOpen && (
         <ForecastPanel
-          data={filteredData}
           isOpen={isForecastOpen}
           onClose={() => setIsForecastOpen(false)}
         />

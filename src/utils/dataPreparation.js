@@ -166,7 +166,7 @@ export function prepareTimeSeriesData(rawData, lookback, targetColumn = null) {
     testX: testXTensor,
     testY: testYTensor,
     scaler: scaler,
-    years: years.slice(lookback), // Years corresponding to predictions
+    years: years, // Include all years for complete historical data visualization
     originalValues: values,
     targetColumn: valueColumn
   };

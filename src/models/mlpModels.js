@@ -101,19 +101,25 @@ export async function trainMLPModel(preparedData, config, progressCallback) {
   const lastYear = years[years.length - 1];
   const chartData = [];
 
-  years.forEach((year, i) => {
+  // Show ALL actual historical data from database (1988-2020)
+  // Use the original values from data preparation, not just test data
+  const allOriginalValues = preparedData.originalValues;
+  const allYears = preparedData.years;
+  
+  allYears.forEach((year, i) => {
     chartData.push({
       year: year,
-      actual: scaler.inverse(testYArray[i] ? testYArray[i][0] : null),
+      actual: Math.round(allOriginalValues[i]),
       predicted: null
     });
   });
 
+  // Add forecast data with rounded whole numbers
   for (let i = 0; i < forecastYears; i++) {
     chartData.push({
       year: lastYear + i + 1,
       actual: null,
-      predicted: denormalizedFuture[i]
+      predicted: Math.round(denormalizedFuture[i])
     });
   }
 
