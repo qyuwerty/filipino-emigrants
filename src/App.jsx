@@ -306,6 +306,122 @@ const App = () => {
     });
   }, [schema]);
 
+  // ========== CSV EXPORT/IMPORT FUNCTIONS ==========
+  const exportAgeDataToCSV = () => {
+    if (!ageData.data || ageData.data.length === 0) {
+      alert('No data available to export');
+      return;
+    }
+
+    // Get unique columns from data
+    const columns = ['year', 'ageGroup', 'count'];
+    
+    // Create CSV content
+    const csvContent = [
+      columns.join(','),
+      ...ageData.data.map(row => 
+        columns.map(col => {
+          const value = row[col];
+          // Handle values that might contain commas or quotes
+          if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Create and download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `age-data-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const importAgeDataFromCSV = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target.result;
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          alert('CSV file is empty or invalid');
+          return;
+        }
+
+        // Parse CSV header
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        
+        // Validate required columns
+        const requiredColumns = ['year', 'ageGroup', 'count'];
+        const hasRequiredColumns = requiredColumns.every(col => headers.includes(col));
+        
+        if (!hasRequiredColumns) {
+          alert(`CSV must contain columns: ${requiredColumns.join(', ')}`);
+          return;
+        }
+
+        // Parse CSV data
+        const importedData = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+          
+          if (values.length >= requiredColumns.length) {
+            const rowData = {};
+            headers.forEach((header, index) => {
+              rowData[header] = values[index] || '';
+            });
+            
+            // Convert numeric fields
+            rowData.year = parseInt(rowData.year);
+            rowData.count = parseInt(rowData.count) || 0;
+            
+            importedData.push(rowData);
+          }
+        }
+
+        if (importedData.length === 0) {
+          alert('No valid data found in CSV file');
+          return;
+        }
+
+        // Import data to database
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const record of importedData) {
+          try {
+            // Pass parameters separately, not as an object
+            await ageData.addRecord(record.ageGroup, record.year, record.count);
+            successCount++;
+          } catch (error) {
+            errorCount++;
+          }
+        }
+
+        alert(`Import completed!\nSuccessfully imported: ${successCount} records\nFailed: ${errorCount} records`);
+        
+        // Clear file input
+        event.target.value = '';
+        
+      } catch (error) {
+        console.error('Error importing CSV:', error);
+        alert('Error importing CSV file. Please check the file format and try again.');
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
   // ========== COLUMN EXCLUSION ==========
   const excludedColumns = useMemo(() => {
     return new Set([
@@ -527,6 +643,26 @@ const App = () => {
                           <p className="section-description">
                             Emigrant data by age groups from 1981-2020
                           </p>
+                        </div>
+                        <div className="section-toolbar">
+                          <button
+                            className="button button--secondary"
+                            onClick={exportAgeDataToCSV}
+                            disabled={!ageData.data || ageData.data.length === 0}
+                          >
+                            <Download size={18} />
+                            Export CSV
+                          </button>
+                          <label className="button button--primary" style={{ margin: 0 }}>
+                            <Download size={18} />
+                            Import CSV
+                            <input
+                              type="file"
+                              accept=".csv"
+                              onChange={importAgeDataFromCSV}
+                              style={{ display: 'none' }}
+                            />
+                          </label>
                         </div>
                       </div>
                       <AgeDataTable
