@@ -3,13 +3,15 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBMfKnlIKyMD9I5kb9QS6wtsz_Nh4bSJFo",
-  authDomain: "filipinoemigrantsdb-c8aa5.firebaseapp.com",
-  projectId: "filipinoemigrantsdb-c8aa5",
-  storageBucket: "filipinoemigrantsdb-c8aa5.firebasestorage.app",
-  messagingSenderId: "230361129580",
-  appId: "1:230361129580:web:e6e7bcfd10938a48acae49"
+  apiKey: "AIzaSyD_1lTL3VtByqMTnhd0lL-wBbToWtqsowQ",
+  authDomain: "emigrants-project.firebaseapp.com",
+  projectId: "emigrants-project",
+  storageBucket: "emigrants-project.firebasestorage.app",
+  messagingSenderId: "297133098116",
+  appId: "1:297133098116:web:6f44010de557228b1daed1",
+  measurementId: "G-5D6H8RP2WD"
 };
 
 const app = initializeApp(firebaseConfig);
